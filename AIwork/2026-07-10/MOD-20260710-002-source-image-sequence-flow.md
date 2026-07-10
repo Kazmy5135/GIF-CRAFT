@@ -15,11 +15,13 @@ affected_modules:
   - APP
   - CORE
   - FRAME_WORKSPACE
+  - EXPORT
 approval:
   state: approved
   approved_by: user
   approved_at: 2026-07-11
-related_commits: []
+related_commits:
+  - 1f47b50
 supersedes: []
 ---
 
@@ -57,6 +59,7 @@ supersedes: []
 - `APP`：增加可选源图步骤和跳过路径的页面编排。
 - `CORE`：新增统一 `SourceImageAsset` 概念及生成任务输入约束。
 - `FRAME_WORKSPACE`：使用任务保存的帧率、循环方式和锚点信息进行预览与后续导出。
+- `EXPORT`：使用任务保存的帧率、循环方式、画布和帧顺序生成可复现输出。
 
 ## 当前行为
 
@@ -332,6 +335,7 @@ unordered motion.
 - [ ] 帧数、帧率、循环方式、锚点和画布作为结构化字段保存，不只存在于提示词。
 - [ ] 用户描述与预设底词分层合成，不能覆盖固定画布和稳定对齐等硬约束。
 - [ ] 每个任务保存预设 ID、版本、编译提示词和最终有效参数，能够复现历史请求。
+- [ ] 预览和导出使用任务保存的帧率、循环方式、画布与帧顺序，而不是重新推断。
 
 ## 测试方案
 
@@ -383,7 +387,7 @@ unordered motion.
 
 | 阶段 | Commit | 状态 |
 |---|---|---|
-| 设计 | 本次独立设计提交 | Approved |
+| 设计 | `1f47b50` | Approved |
 | 实施 | Pending | Pending |
 | 关闭 | Pending | Pending |
 
