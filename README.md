@@ -2,7 +2,26 @@
 
 GIF CRAFT 是一个面向浏览器的 H5 序列帧动画生产力工具。它通过接入外部 AI API，先帮助用户生成或确认一张源图，再结合游戏序列帧预设和用户描述生成连续帧，并提供预览、整理与导出工作流。
 
-项目当前处于基础规划阶段：本仓库先明确产品目标、系统边界和模块职责，暂不包含业务代码。
+项目当前已完成基础 H5 应用外壳和源图准备模块。用户可以在“生图”页切换文生图、图生图或本地图片直通流程；序列帧生成与导出页面目前仍是明确的规划占位。
+
+## 本地运行
+
+要求 Node.js 24 或兼容当前依赖的现代 Node.js 版本。
+
+```bash
+npm install
+copy .env.example .env
+npm run dev
+```
+
+默认访问 `http://localhost:5173`。`.env` 中的 `GEMINI_API_KEY` 与 `OPENAI_API_KEY` 只由服务端代理读取；不配置密钥时，本地图片直通和界面仍可使用，AI 生成按钮会保持禁用。
+
+生产构建与启动：
+
+```bash
+npm run build
+npm start
+```
 
 ## 项目目标
 
@@ -46,17 +65,18 @@ GIF CRAFT 是一个面向浏览器的 H5 序列帧动画生产力工具。它通
 ├─ MODULE_INDEX.md    当前模块职责、边界、依赖与阅读入口
 ├─ AIwork/            按日期保存大模块、工作记录和 Code Review
 ├─ docs/               产品、架构、AI 接入与路线图文档
-├─ public/             H5 静态资源占位
+├─ server/             轻量代理与 Gemini/OpenAI 服务商适配器
 ├─ src/
 │  ├─ app/             应用装配、路由和全局生命周期
 │  ├─ features/        按用户能力划分的业务功能
 │  ├─ core/            与框架无关的领域模型和用例
 │  ├─ infrastructure/  AI、存储、网络和导出等外部实现
 │  └─ shared/          跨模块复用的 UI、类型和工具
-└─ tests/              测试策略与后续测试文件
+├─ package.json        开发、测试、构建和生产启动命令
+└─ .env.example        服务端环境变量示例
 ```
 
-目前各目录仅包含职责说明，不包含实现代码。详细设计见 [系统架构](docs/ARCHITECTURE.md) 和 [AI API 接入约定](docs/AI_API.md)。
+当前实现入口和测试入口以 [`MODULE_INDEX.md`](MODULE_INDEX.md) 为准。详细设计见 [系统架构](docs/ARCHITECTURE.md) 和 [AI API 接入约定](docs/AI_API.md)。
 
 ## 文档治理
 

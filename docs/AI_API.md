@@ -18,6 +18,26 @@
 - 取消任务（服务商支持时）。
 - 将服务商错误映射为统一错误类型。
 
+源图准备阶段已经实现其中的配置状态、文生图和图生图能力。图生序列帧、异步查询和取消仍属于后续模块。
+
+## 已实现的源图 API
+
+H5 只调用同源代理：
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| `GET` | `/api/health` | 代理存活检查 |
+| `GET` | `/api/providers` | 返回服务商配置状态和能力矩阵，不返回密钥 |
+| `POST` | `/api/source-images/generate` | 提交统一文生图或图生图请求 |
+
+代理端当前适配：
+
+- Google Gemini 官方 API，默认模型 `gemini-3.1-flash-image`。
+- OpenAI 官方 Image API，默认模型 `gpt-image-2`；文生图使用 `/v1/images/generations`，图生图使用 `/v1/images/edits`。
+- 密钥分别由服务端环境变量 `GEMINI_API_KEY` 和 `OPENAI_API_KEY` 注入；模型可通过 `GEMINI_IMAGE_MODEL`、`OPENAI_IMAGE_MODEL` 覆盖。
+- 同一个 `clientRequestId` 在单个代理进程内复用进行中或已完成结果，避免页面重复点击创建重复计费请求。
+- 首期只向 H5 暴露 `request_failed`、`status_unknown` 和 `no_valid_image` 级别的脱敏状态，不展示精细厂商错误分类。
+
 ## 标准输入概念
 
 - 提示词与负面提示词。
