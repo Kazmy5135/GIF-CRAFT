@@ -18,12 +18,13 @@
 | `GOVERNANCE` | 项目治理 | Active | 变更分级、文档生命周期、模块导航和审查归档 | [`AGENTS.md`](AGENTS.md) | None |
 | `APP` | 应用外壳 | Planned | H5 启动、路由、全局生命周期和依赖装配 | [`src/app`](src/app/README.md) | `SHARED` |
 | `PROJECT` | 项目管理 | Planned | 项目元数据、草稿和项目级配置 | [`src/features`](src/features/README.md) | `CORE`, `STORAGE` |
-| `GENERATION` | 序列帧生成编排 | Planned | 生成任务创建、状态推进、进度和重试 | [`src/features`](src/features/README.md) | `CORE`, `AI_GATEWAY`, `STORAGE` |
+| `SOURCE_IMAGE` | 源图准备 | Planning | 文生图、图生图、本地上传与源图确认 | [`src/features`](src/features/README.md) | `CORE`, `AI_GATEWAY`, `STORAGE` |
+| `GENERATION` | 图生序列帧编排 | Planning | 通过角色/场景预设和已确认源图创建游戏序列帧任务 | [`src/features`](src/features/README.md) | `CORE`, `AI_GATEWAY`, `STORAGE` |
 | `FRAME_WORKSPACE` | 帧工作区 | Planned | 帧预览、筛选、删除、排序和局部重试 | [`src/features`](src/features/README.md) | `CORE`, `GENERATION`, `SHARED` |
 | `EXPORT` | 导出 | Planned | 图片包及后续 GIF、WebP、视频导出 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE`, `FRAME_WORKSPACE` |
-| `AI_GATEWAY` | AI Gateway | Planned | 统一 AI 能力和服务商差异 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE` |
+| `AI_GATEWAY` | AI Gateway | Planning | 统一文生图、图生图、图生序列帧能力和服务商差异 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE` |
 | `STORAGE` | 存储 | Planned | 浏览器本地存储及未来云端存储适配 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE` |
-| `CORE` | 核心领域 | Planned | 领域对象、业务规则、状态和用例契约 | [`src/core`](src/core/README.md) | None |
+| `CORE` | 核心领域 | Planning | 领域对象、源图资产、业务规则、状态和用例契约 | [`src/core`](src/core/README.md) | None |
 | `SHARED` | 共享基础 | Planned | 跨模块 UI 基础、类型、错误和小型工具 | [`src/shared`](src/shared/README.md) | None |
 
 ## 模块详情
@@ -66,18 +67,31 @@
 - **长期文档**：[`项目定义`](docs/PROJECT.md)、[`系统架构`](docs/ARCHITECTURE.md)。
 - **有效设计**：None。
 
-### GENERATION — 序列帧生成编排
+### SOURCE_IMAGE — 源图准备
 
-- **职责**：创建生成任务、推进统一状态、报告进度、处理取消和安全重试。
+- **职责**：通过文生图、图生图或本地直接上传获得并确认统一源图资产。
+- **非职责**：不生成序列帧，不管理帧编辑或导出，不提供专业图片编辑器。
+- **数据所有权**：源图准备过程、来源类型、候选结果和当前确认状态。
+- **输入/输出**：输入文字提示词或本地参考图；输出一个已确认的 `SourceImageAsset`。
+- **依赖边界**：通过 `AI_GATEWAY` 使用源图生成能力，通过 `STORAGE` 保存可恢复引用；禁止直接依赖服务商实现。
+- **核心不变量**：只有用户确认且可读取的源图才能进入序列生成；本地直接上传不调用源图生成 API。
+- **主要失败模式**：上传图片无效、生成失败、资源过期、能力不支持、未确认结果被继续使用。
+- **测试入口**：尚未建立。
+- **长期文档**：待批准后同步 [`项目定义`](docs/PROJECT.md)、[`系统架构`](docs/ARCHITECTURE.md) 和 [`AI API 接入约定`](docs/AI_API.md)。
+- **有效设计**：规划中 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
+
+### GENERATION — 图生序列帧编排
+
+- **职责**：使用已确认源图、角色/场景预设和用户描述创建游戏序列帧任务，并推进状态、报告进度、处理取消和安全重试。
 - **非职责**：不包含具体厂商字段，不负责帧编辑或导出编码。
-- **数据所有权**：`GenerationJob`、任务进度、统一错误和重试记录。
-- **输入/输出**：输入项目参数和生成指令；输出有序帧结果或统一失败信息。
+- **数据所有权**：`SequencePreset`、`GenerationJob`、任务进度、统一错误和重试记录。
+- **输入/输出**：输入已确认源图资产、角色/场景预设、用户描述和结构化序列参数；输出带帧率、循环方式和对齐信息的有序帧结果或统一失败信息。
 - **依赖边界**：通过 `AI_GATEWAY` 调用服务商，通过 `STORAGE` 保存可恢复状态。
-- **核心不变量**：状态转换合法；重试具备幂等策略；单帧失败可识别。
-- **主要失败模式**：重复计费、轮询失控、状态回退、结果帧索引混乱。
+- **核心不变量**：任务保存不可变源图、预设版本、编译提示词和有效参数快照；工程参数优先于用户描述；状态转换合法；重试具备幂等策略。
+- **主要失败模式**：对齐漂移、帧率映射不透明、预设版本不可复现、循环首尾跳变、重复计费、状态回退、结果帧索引混乱。
 - **测试入口**：尚未建立。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)、[`AI API 接入约定`](docs/AI_API.md)。
-- **有效设计**：None。
+- **有效设计**：规划中 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
 
 ### FRAME_WORKSPACE — 帧工作区
 
@@ -107,16 +121,16 @@
 
 ### AI_GATEWAY — AI Gateway
 
-- **职责**：定义统一 AI 能力、适配服务商鉴权和任务协议、映射统一错误。
+- **职责**：定义统一文生图、图生图、图生序列帧能力，适配服务商鉴权和任务协议，映射统一错误。
 - **非职责**：不管理页面状态，不拥有业务工作流或用户项目。
 - **数据所有权**：服务商非敏感配置、能力描述和外部任务 ID 映射。
-- **输入/输出**：输入统一生成请求；输出统一任务状态、帧结果或错误。
+- **输入/输出**：输入统一源图或序列生成请求；输出统一源图任务、序列任务、结果或错误。
 - **依赖边界**：实现 `CORE` 中的网关契约；任何业务模块不得直接依赖服务商实现。
 - **核心不变量**：服务商专有字段不向核心和页面泄漏；凭据不进入仓库或普通日志。
 - **主要失败模式**：鉴权失败、限流、超时、回调丢失、错误映射不完整。
 - **测试入口**：尚未建立，后续采用服务商契约测试。
 - **长期文档**：[`AI API 接入约定`](docs/AI_API.md)、[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：None。
+- **有效设计**：规划中 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
 
 ### STORAGE — 存储
 
@@ -135,14 +149,14 @@
 
 - **职责**：定义领域对象、业务规则、任务状态、统一错误和用例契约。
 - **非职责**：不依赖 UI 框架、浏览器 API 或服务商 SDK。
-- **数据所有权**：`Project`、`GenerationJob`、`Frame`、`ExportJob` 的领域定义。
+- **数据所有权**：`Project`、`SourceImageAsset`、`GenerationJob`、`Frame`、`ExportJob` 的领域定义。
 - **输入/输出**：输入领域命令和网关结果；输出合法状态、领域事件和用例结果。
 - **依赖边界**：不得依赖 `APP`、功能模块或基础设施实现。
 - **核心不变量**：领域规则可脱离浏览器测试，外部差异通过契约隔离。
 - **主要失败模式**：非法状态转换、基础设施字段泄漏、领域对象职责重叠。
 - **测试入口**：尚未建立。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：None。
+- **有效设计**：规划中 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
 
 ### SHARED — 共享基础
 
