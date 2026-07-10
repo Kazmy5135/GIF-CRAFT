@@ -2,7 +2,7 @@
 id: MOD-20260710-001
 title: 项目严格文档治理体系
 type: major
-status: In Progress
+status: Closed
 created: 2026-07-10
 updated: 2026-07-10
 timezone: Asia/Hong_Kong
@@ -14,6 +14,7 @@ approval:
   approved_at: 2026-07-10
 related_commits:
   - 9cabf77
+  - e5b5e30
 supersedes: []
 ---
 
@@ -118,20 +119,30 @@ Draft → Approved → In Progress → Implemented → Verified → Closed
 
 ## 验收标准
 
-- 新 Agent 能从 `AGENTS.md` 找到模块索引和治理规则。
-- 模块索引包含稳定 ID、职责、非职责、入口、数据、依赖、不变量、失败模式和文档链接。
-- 大模块、跨日记录和 Code Review 模板字段完整。
-- 治理规则能明确区分新增 AI 服务商、单模块错误修复和纯配置变更。
-- 所有本地 Markdown 链接有效，模块 ID 无重复。
-- Git 历史保留设计、实施和关闭三个独立阶段。
+- [x] 新 Agent 能从 `AGENTS.md` 找到模块索引和治理规则。
+- [x] 模块索引包含稳定 ID、职责、非职责、入口、数据、依赖、不变量、失败模式和文档链接。
+- [x] 大模块、跨日记录和 Code Review 模板字段完整。
+- [x] 治理规则能明确区分新增 AI 服务商、单模块错误修复和纯配置变更。
+- [x] 所有本地 Markdown 链接有效，模块 ID 无重复。
+- [x] Git 历史保留设计、实施和关闭三个独立阶段。
 
 ## 测试方案
 
-- 检查所有新增文件的路径和命名格式。
-- 搜索模块索引中的重复 ID。
-- 解析并验证 Markdown 相对链接指向存在的文件。
-- 模拟大模块、小修改、纯配置和跨天开发四类流程。
-- 检查工作区、提交历史和远端 `master` 状态。
+- [x] 检查所有新增文件的路径和命名格式。
+- [x] 搜索模块索引中的重复 ID。
+- [x] 解析并验证 Markdown 相对链接指向存在的文件。
+- [x] 模拟大模块、小修改、纯配置和跨天开发四类流程。
+- [x] 检查工作区和三阶段提交历史；远端状态在关闭提交后核验。
+
+## 验证结果
+
+- 治理主文档符合 `MOD-YYYYMMDD-NNN-<ascii-slug>.md` 命名规范。
+- `MODULE_INDEX.md` 快速索引中的 10 个模块 ID 均唯一。
+- 仓库内全部本地 Markdown 链接可解析到实际文件或目录。
+- `git diff --check` 未发现尾随空格、空白错误或异常行尾。
+- `AGENTS.md` 对新增 AI 服务商执行大模块门禁，对单模块局部修复允许先实施后 Review，并排除纯配置逻辑记录。
+- 跨日规则只允许一个创建日主文档，后续日期使用同模块工作记录。
+- 本次实施只新增或修改 Markdown 文档，没有生成产品业务代码。
 
 ## 决策记录
 
@@ -148,5 +159,5 @@ Draft → Approved → In Progress → Implemented → Verified → Closed
 | 阶段 | Commit | 状态 |
 |---|---|---|
 | 设计 | `9cabf77` | Approved |
-| 实施 | 待提交 | Pending |
-| 关闭 | 待提交 | Pending |
+| 实施 | `e5b5e30` | Implemented |
+| 关闭 | 本文件所在提交 | Closed |
