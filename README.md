@@ -40,6 +40,9 @@ GIF CRAFT 是一个面向浏览器的 H5 序列帧动画生产力工具。它通
 
 ```text
 .
+├─ AGENTS.md          Agent 工作规范与强制变更分级
+├─ MODULE_INDEX.md    当前模块职责、边界、依赖与阅读入口
+├─ AIwork/            按日期保存大模块、工作记录和 Code Review
 ├─ docs/               产品、架构、AI 接入与路线图文档
 ├─ public/             H5 静态资源占位
 ├─ src/
@@ -52,6 +55,16 @@ GIF CRAFT 是一个面向浏览器的 H5 序列帧动画生产力工具。它通
 ```
 
 目前各目录仅包含职责说明，不包含实现代码。详细设计见 [系统架构](docs/ARCHITECTURE.md) 和 [AI API 接入约定](docs/AI_API.md)。
+
+## 文档治理
+
+本项目使用严格文档控制，不采用无边界的 Vibe Coding：
+
+- 所有开发需求先由 Agent 判定为“大模块”或“小修改”。
+- 大模块必须先在 `AIwork/` 建立设计文档并取得用户批准，之后才能实施。
+- 小修改可以直接实施，在用户主动发起 Code Review 时归档当天的逻辑变化。
+- 新 Agent 应先阅读 [`AGENTS.md`](AGENTS.md) 和 [`MODULE_INDEX.md`](MODULE_INDEX.md)，再按索引读取目标模块，避免扫描全部代码。
+- 完整规则和模板见 [`AIwork/README.md`](AIwork/README.md)。
 
 ## 里程碑
 

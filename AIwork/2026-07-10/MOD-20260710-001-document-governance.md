@@ -2,7 +2,7 @@
 id: MOD-20260710-001
 title: 项目严格文档治理体系
 type: major
-status: Approved
+status: In Progress
 created: 2026-07-10
 updated: 2026-07-10
 timezone: Asia/Hong_Kong
@@ -12,7 +12,8 @@ approval:
   state: approved
   approved_by: user
   approved_at: 2026-07-10
-related_commits: []
+related_commits:
+  - 9cabf77
 supersedes: []
 ---
 
@@ -146,6 +147,6 @@ Draft → Approved → In Progress → Implemented → Verified → Closed
 
 | 阶段 | Commit | 状态 |
 |---|---|---|
-| 设计 | 待提交 | Approved |
+| 设计 | `9cabf77` | Approved |
 | 实施 | 待提交 | Pending |
 | 关闭 | 待提交 | Pending |
