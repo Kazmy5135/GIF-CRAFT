@@ -16,16 +16,17 @@
 | ID | 模块 | 状态 | 主要职责 | 入口 | 直接依赖 |
 |---|---|---|---|---|---|
 | `GOVERNANCE` | 项目治理 | Active | 变更分级、文档生命周期、模块导航和审查归档 | [`AGENTS.md`](AGENTS.md) | None |
-| `APP` | 应用外壳 | Planned | H5 启动、路由、全局生命周期和依赖装配 | [`src/app`](src/app/README.md) | `SHARED` |
-| `PROJECT` | 项目管理 | Planned | 项目元数据、草稿和项目级配置 | [`src/features`](src/features/README.md) | `CORE`, `STORAGE` |
-| `SOURCE_IMAGE` | 源图准备 | Planned | 文生图、图生图、本地上传与源图确认 | [`src/features`](src/features/README.md) | `CORE`, `AI_GATEWAY`, `STORAGE` |
+| `APP` | 应用外壳 | Planning | H5 启动、左侧页签、路由、全局生命周期和依赖装配 | [`src/app`](src/app/README.md) | `SHARED` |
+| `SETTINGS` | 设置 | Planning | API 连接、凭据引用和提示词模板覆盖 | [`src/features`](src/features/README.md) | `AI_GATEWAY`, `STORAGE`, `CORE` |
+| `PROJECT` | 项目管理 | Planning | 项目元数据、草稿和项目级配置 | [`src/features`](src/features/README.md) | `CORE`, `STORAGE` |
+| `SOURCE_IMAGE` | 源图准备 | Planning | 文生图、图生图、本地上传、结果历史与源图确认 | [`src/features`](src/features/README.md) | `CORE`, `AI_GATEWAY`, `STORAGE`, `SETTINGS` |
 | `GENERATION` | 图生序列帧编排 | Planned | 通过角色/场景预设和已确认源图创建游戏序列帧任务 | [`src/features`](src/features/README.md) | `CORE`, `AI_GATEWAY`, `STORAGE` |
 | `FRAME_WORKSPACE` | 帧工作区 | Planned | 帧预览、筛选、删除、排序和局部重试 | [`src/features`](src/features/README.md) | `CORE`, `GENERATION`, `SHARED` |
 | `EXPORT` | 导出 | Planned | 图片包及后续 GIF、WebP、视频导出 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE`, `FRAME_WORKSPACE` |
-| `AI_GATEWAY` | AI Gateway | Planned | 统一文生图、图生图、图生序列帧能力和服务商差异 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE` |
-| `STORAGE` | 存储 | Planned | 浏览器本地存储及未来云端存储适配 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE` |
-| `CORE` | 核心领域 | Planned | 领域对象、源图资产、序列预设、业务规则、状态和用例契约 | [`src/core`](src/core/README.md) | None |
-| `SHARED` | 共享基础 | Planned | 跨模块 UI 基础、类型、错误和小型工具 | [`src/shared`](src/shared/README.md) | None |
+| `AI_GATEWAY` | AI Gateway | Planning | 统一文生图、图生图、图生序列帧能力和服务商差异 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE` |
+| `STORAGE` | 存储 | Planning | 浏览器本地存储及未来云端存储适配 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE` |
+| `CORE` | 核心领域 | Planning | 领域对象、源图任务、源图资产、序列预设、错误和用例契约 | [`src/core`](src/core/README.md) | None |
+| `SHARED` | 共享基础 | Planning | 跨模块 UI 基础、类型、错误和小型工具 | [`src/shared`](src/shared/README.md) | None |
 
 ## 模块详情
 
@@ -53,7 +54,20 @@
 - **主要失败模式**：全局错误未隔离、路由状态丢失、基础设施泄漏到页面装配。
 - **测试入口**：尚未建立。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)、[`MOD-20260711-001`](AIwork/2026-07-11/MOD-20260711-001-basic-h5-ui-shell.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)。
+
+### SETTINGS — 设置
+
+- **职责**：管理 API 连接的非敏感配置、凭据引用、能力校验结果和提示词模板覆盖。
+- **非职责**：不持久化明文服务端密钥，不提交生成任务，不拥有项目或图片结果。
+- **数据所有权**：`ProviderProfile`、`PromptTemplateOverride`、连接验证时间和能力快照。
+- **输入/输出**：输入用户配置和模板覆盖；输出经过校验的连接引用和版本化提示词设置。
+- **依赖边界**：通过 `AI_GATEWAY` 校验连接，通过 `STORAGE` 保存非敏感配置；业务页面不能读取完整凭据。
+- **核心不变量**：内置模板不可变；用户修改形成覆盖版本；明文 API Key 默认只存在内存会话。
+- **主要失败模式**：密钥泄漏、连接测试隐式计费、过期能力快照、模板覆盖无法复现。
+- **测试入口**：尚未建立。
+- **长期文档**：[`AI API 接入约定`](docs/AI_API.md)、[`系统架构`](docs/ARCHITECTURE.md)。
+- **有效设计**：已批准 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)。
 
 ### PROJECT — 项目管理
 
@@ -66,20 +80,20 @@
 - **主要失败模式**：草稿恢复失败、版本不兼容、敏感数据被持久化。
 - **测试入口**：尚未建立。
 - **长期文档**：[`项目定义`](docs/PROJECT.md)、[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)。
 
 ### SOURCE_IMAGE — 源图准备
 
-- **职责**：通过文生图、图生图或本地直接上传获得并确认统一源图资产。
+- **职责**：通过文生图、图生图或本地直接上传获得、追踪并确认统一源图资产。
 - **非职责**：不生成序列帧，不管理帧编辑或导出，不提供专业图片编辑器。
-- **数据所有权**：源图准备过程、来源类型、候选结果和当前确认状态。
+- **数据所有权**：源图任务、来源类型、候选结果、生成历史和当前确认状态。
 - **输入/输出**：输入文字提示词或本地参考图；输出一个已确认的 `SourceImageAsset`。
 - **依赖边界**：通过 `AI_GATEWAY` 使用源图生成能力，通过 `STORAGE` 保存可恢复引用；禁止直接依赖服务商实现。
 - **核心不变量**：只有用户确认且可读取的源图才能进入序列生成；本地直接上传不调用源图生成 API。
 - **主要失败模式**：上传图片无效、生成失败、资源过期、能力不支持、未确认结果被继续使用。
 - **测试入口**：尚未建立。
 - **长期文档**：[`项目定义`](docs/PROJECT.md)、[`系统架构`](docs/ARCHITECTURE.md) 和 [`AI API 接入约定`](docs/AI_API.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)。
 
 ### GENERATION — 图生序列帧编排
 
@@ -131,7 +145,7 @@
 - **主要失败模式**：鉴权失败、限流、超时、回调丢失、错误映射不完整。
 - **测试入口**：尚未建立，后续采用服务商契约测试。
 - **长期文档**：[`AI API 接入约定`](docs/AI_API.md)、[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)。
 
 ### STORAGE — 存储
 
@@ -144,7 +158,7 @@
 - **主要失败模式**：容量耗尽、序列化损坏、版本不兼容、清理误删。
 - **测试入口**：尚未建立。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)。
 
 ### CORE — 核心领域
 
@@ -157,7 +171,7 @@
 - **主要失败模式**：非法状态转换、基础设施字段泄漏、领域对象职责重叠。
 - **测试入口**：尚未建立。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)。
 
 ### SHARED — 共享基础
 
@@ -170,4 +184,4 @@
 - **主要失败模式**：业务逻辑下沉、循环依赖、抽象过早。
 - **测试入口**：尚未建立。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：None。
+- **有效设计**：已批准 [`MOD-20260711-001`](AIwork/2026-07-11/MOD-20260711-001-basic-h5-ui-shell.md)。
