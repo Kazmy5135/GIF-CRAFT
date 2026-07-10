@@ -10,6 +10,9 @@ coverage/
 !.env.example
 *.local
 
+# Generated server output
+dist-server/
+
 # Logs and temporary files
 *.log
 tmp/

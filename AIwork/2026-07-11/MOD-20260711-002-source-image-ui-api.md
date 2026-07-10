@@ -2,7 +2,7 @@
 id: MOD-20260711-002
 title: 生图模块 UI 与双服务商适配
 type: major
-status: Approved
+status: In Progress
 created: 2026-07-11
 updated: 2026-07-11
 timezone: Asia/Hong_Kong
@@ -18,7 +18,8 @@ approval:
   state: approved
   approved_by: user
   approved_at: 2026-07-11
-related_commits: []
+related_commits:
+  - edd1cf5
 supersedes: []
 ---
 
@@ -331,7 +332,7 @@ None。批准默认值：图生图“改动描述”必填；每次默认生成 
 
 | 阶段 | Commit | 状态 |
 |---|---|---|
-| 设计 | 本次独立设计提交 | Approved |
+| 设计 | `edd1cf5` | Approved |
 | 实施 | Pending | Pending |
 | 关闭 | Pending | Pending |
 
