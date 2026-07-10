@@ -22,6 +22,7 @@ approval:
   approved_at: 2026-07-11
 related_commits:
   - 1f47b50
+  - 9a52360
 supersedes: []
 ---
 
@@ -388,6 +389,7 @@ unordered motion.
 | 阶段 | Commit | 状态 |
 |---|---|---|
 | 设计 | `1f47b50` | Approved |
+| 长期文档同步 | `9a52360` | Completed |
 | 实施 | Pending | Pending |
 | 关闭 | Pending | Pending |
 
