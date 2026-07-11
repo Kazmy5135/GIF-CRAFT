@@ -20,7 +20,7 @@
 | `SETTINGS` | 设置 | Active | API 配置状态、MCP 工具发现和提示词模板覆盖 | [`src/features/settings/SettingsPage.tsx`](src/features/settings/SettingsPage.tsx) | `AI_GATEWAY`, `STORAGE`, `CORE` |
 | `PROJECT` | 项目管理 | Planned | 项目元数据、草稿和项目级配置 | [`src/features`](src/features/README.md) | `CORE`, `STORAGE` |
 | `SOURCE_IMAGE` | 源图准备 | Active | 通过 Gorilla Banana、Image2 或本地上传准备、追踪并确认源图 | [`src/features/source-image/SourceImageContext.tsx`](src/features/source-image/SourceImageContext.tsx) | `CORE`, `AI_GATEWAY`, `STORAGE`, `SETTINGS` |
-| `GENERATION` | 图生序列帧编排 | Planned | 通过角色/场景预设和已确认源图创建游戏序列帧任务 | [`src/features`](src/features/README.md) | `CORE`, `AI_GATEWAY`, `STORAGE` |
+| `GENERATION` | 图生序列帧编排 | Planned / Planning | 通过角色/场景预设和已确认源图创建游戏序列帧任务 | [`src/features`](src/features/README.md) | `CORE`, `AI_GATEWAY`, `STORAGE` |
 | `FRAME_WORKSPACE` | 帧工作区 | Planned | 帧预览、筛选、删除、排序和局部重试 | [`src/features`](src/features/README.md) | `CORE`, `GENERATION`, `SHARED` |
 | `EXPORT` | 导出 | Planned | 图片包及后续 GIF、WebP、视频导出 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE`, `FRAME_WORKSPACE` |
 | `AI_GATEWAY` | AI Gateway | Active | 统一文生图、图生图并适配 Gorilla MCP、Gemini 与 OpenAI 差异 | [`server/providers`](server/providers) | `CORE` |
@@ -106,7 +106,7 @@
 - **主要失败模式**：对齐漂移、帧率映射不透明、预设版本不可复现、循环首尾跳变、重复计费、状态回退、结果帧索引混乱。
 - **测试入口**：尚未建立。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)、[`AI API 接入约定`](docs/AI_API.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)；规划中 [`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md)。
 
 ### FRAME_WORKSPACE — 帧工作区
 
