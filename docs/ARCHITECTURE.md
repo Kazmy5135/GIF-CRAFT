@@ -53,15 +53,17 @@ MVP 生成链路统一为：
 
 包含与 UI 框架和服务商无关的领域对象、任务状态、业务规则和用例契约。它是稳定层，应能够脱离浏览器页面进行测试。
 
-建议的生成任务状态：
+当前序列任务状态：
 
 ```text
-draft → queued → submitting → generating → processing → completed
-                   │              │            │
-                   └──────────────┴────────────┴→ failed → retrying
-                                                        │
-                                                        └→ cancelled
+draft → validating → ready → submitting → queued → generating → processing → completed
+                         │           │          │           │
+                         │           ├──────────┴───────────┴→ failed → retrying
+                         │           └────────────────────────→ status_unknown → abandoned
+                         └────────────────────────────────────→ cancelled
 ```
+
+`status_unknown` 表示代理无法确认外部执行结果，不能自动重新提交；用户可在明确知悉远端可能仍在运行后停止本地跟踪。当前 Seedance 工具不提供外部任务 ID、查询、取消或真实百分比，因此页面只展示真实阶段与耗时。
 
 ### `src/infrastructure`
 
@@ -74,19 +76,20 @@ draft → queued → submitting → generating → processing → completed
 ## 当前实现边界
 
 - 客户端采用 React、TypeScript、React Router 和 Vite，入口为 `src/main.tsx`，应用装配位于 `src/app/App.tsx`。
-- H5 负责模式切换、图片解码校验、提示词预览、任务状态、结果确认和 IndexedDB 历史。
-- Express 轻量代理位于 `server/index.ts`，负责请求校验、幂等保护、密钥隔离和服务商适配器调用。
-- Gorilla Canvas MCP、Google Gemini 与 OpenAI 的厂商协议分别收敛在 `server/providers/mcp.ts`、`server/providers/gemini.ts` 和 `server/providers/openai.ts`。MCP 通过服务端 SSE Client 调用，生图页将 Banana 与 Image2 显示为独立提供方。
+- H5 负责源图解码与确认、序列预设和请求预览、任务状态、轮询恢复、结果完整性校验和 IndexedDB 历史。
+- Express 轻量代理位于 `server/index.ts`，负责请求校验、单活跃序列任务保护、进程级幂等、代理实例边界、密钥隔离和服务商适配器调用。
+- Gorilla Canvas MCP、Google Gemini 与 OpenAI 的厂商协议分别收敛在 `server/providers/mcp.ts`、`server/providers/gemini.ts` 和 `server/providers/openai.ts`。序列生成使用 Gorilla MCP Seedance 2.0 fast 图生视频工具；服务端先安全下载和验证 H.264 MP4，再通过 `ffmpeg` 均匀抽取 8/12 个 PNG 帧。
+- 浏览器存储统一使用 IndexedDB `gif-craft` v2：`source-images` 保持 v1 数据兼容，新增 `sequence-jobs`、`frame-resources` 和 `storage-meta`。任务元数据与帧 Blob 原子保存，按容量、数量和时间执行保护性清理。
 - 生产构建生成 `dist/` 客户端资源与 `dist-server/` 服务端资源；直接访问 H5 子路由由代理回退到 `index.html`。
-- 当前没有账户、云端项目和服务端素材持久化；生图结果与非敏感模板覆盖保存在浏览器本地。
+- 当前没有账户、计费、云端项目和服务端长期素材持久化；生图结果、序列任务、帧 Blob 与非敏感模板覆盖保存在浏览器本地。
 
 ## 数据边界
 
 - `Project`：项目元数据、提示词、画面规格和帧序列引用。
 - `SourceImageAsset`：统一源图资产、来源类型、资源引用、尺寸、生成来源和用户确认状态。
 - `SequencePreset`：角色/场景类型、动作子类、底词版本、默认帧数、帧率、循环方式和对齐规则。
-- `GenerationJob`：服务商无关的任务参数、状态、进度、错误和重试信息。
-- `Frame`：帧索引、来源任务、资源地址或本地引用、尺寸和审核状态。
+- `GenerationJob`：服务商无关的不可变请求快照、状态、阶段、恢复边界、错误、父子重试关系和结果完整性。
+- `Frame`：稳定帧 ID、来源任务、原始/显示索引、本地 Blob 引用、尺寸、格式、大小和服务商时间点。
 - `ProviderConfig`：服务商类型、非敏感配置及凭据引用；不得将明文密钥写入仓库。
 - `ExportJob`：导出格式、帧率、尺寸、质量和输出状态。
 
@@ -94,7 +97,7 @@ draft → queued → submitting → generating → processing → completed
 
 - 所有任务状态变化可追踪、可解释。
 - 网络超时、限流、鉴权失败和服务商错误需映射为统一错误类型。
-- 重试应具备幂等策略，避免重复计费或产生不可识别的重复任务。
+- 重试应具备幂等策略，避免产生不可识别的重复外部任务。
 - 帧顺序使用稳定索引，删除或重试不得破坏原始序列关系。
 - 序列任务保存不可变源图引用、预设 ID/版本、编译提示词和最终有效参数。
 - 帧数、帧率、循环方式、画布和锚点由结构化字段表达，不能只依赖提示词。
@@ -103,7 +106,6 @@ draft → queued → submitting → generating → processing → completed
 
 ## 待决策项
 
-- 图生序列帧所用的首个服务商及其序列一致性能力。
 - 首期导出格式优先级。
-- 项目级草稿与图片历史的容量控制、清理和迁移策略。
+- 项目级草稿与跨模块素材历史的长期容量策略。
 - 生产代理的鉴权、限流、部署平台与素材隐私策略。
