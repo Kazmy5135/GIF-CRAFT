@@ -29,17 +29,20 @@ import {
   deleteSourceImage,
   listSourceImages,
   saveSourceImage,
+  SourceImageInUseError,
 } from "../../infrastructure/storage/sourceImageRepository";
 import { getImageDimensions, nearestAspectRatio, referenceImageDataUrl } from "./imageFile";
 
 const CURRENT_SOURCE_KEY = "gif-craft.current-source-image-id";
 
-interface SourceImageContextValue {
+export interface SourceImageContextValue {
   providers: ProviderCapabilities[];
   providersLoading: boolean;
   refreshProviders: () => Promise<void>;
   history: SourceImageAsset[];
+  historyLoading: boolean;
   currentSourceId: string | null;
+  currentSource: SourceImageAsset | null;
   taskStatus: SourceImageTaskStatus;
   taskError: string;
   promptSettings: PromptSettings;
@@ -47,17 +50,37 @@ interface SourceImageContextValue {
   resetPromptSettings: () => void;
   generate: (request: SourceImageGenerateRequest) => Promise<void>;
   addLocalImage: (image: ReferenceImageSnapshot) => Promise<void>;
-  confirmSource: (id: string) => void;
+  confirmSource: (id: string) => Promise<void>;
   removeSourceImage: (id: string) => Promise<void>;
   clearTaskError: () => void;
 }
 
-const SourceImageContext = createContext<SourceImageContextValue | null>(null);
+export const SourceImageContext = createContext<SourceImageContextValue | null>(null);
+
+function imageBytes(dataUrl: string, expectedMimeType: string): Uint8Array {
+  const match = /^data:(image\/(?:png|jpeg|webp));base64,([a-zA-Z0-9+/=]+)$/.exec(dataUrl);
+  if (!match || match[1] !== expectedMimeType) {
+    throw new Error("源图资源格式与记录不一致。");
+  }
+  const decoded = atob(match[2]);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index += 1) bytes[index] = decoded.charCodeAt(index);
+  if (bytes.byteLength === 0) throw new Error("源图资源为空。");
+  return bytes;
+}
+
+async function contentSnapshotId(bytes: Uint8Array): Promise<string> {
+  const digestInput = new Uint8Array(bytes.byteLength);
+  digestInput.set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", digestInput.buffer);
+  return `sha256:${Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
 
 export function SourceImageProvider({ children }: PropsWithChildren) {
   const [providers, setProviders] = useState<ProviderCapabilities[]>([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [history, setHistory] = useState<SourceImageAsset[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [currentSourceId, setCurrentSourceId] = useState<string | null>(() =>
     localStorage.getItem(CURRENT_SOURCE_KEY),
   );
@@ -78,7 +101,10 @@ export function SourceImageProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     void refreshProviders();
-    void listSourceImages().then(setHistory).catch(() => setHistory([]));
+    void listSourceImages()
+      .then(setHistory)
+      .catch(() => setHistory([]))
+      .finally(() => setHistoryLoading(false));
   }, [refreshProviders]);
 
   const updatePromptSettings = useCallback((settings: PromptSettings) => {
@@ -117,6 +143,7 @@ export function SourceImageProvider({ children }: PropsWithChildren) {
               mimeType: image.mimeType,
               width: dimensions.width,
               height: dimensions.height,
+              availability: "unknown",
               sourceName: request.referenceImage?.name,
               promptSnapshot: {
                 userPrompt: request.userPrompt,
@@ -160,6 +187,8 @@ export function SourceImageProvider({ children }: PropsWithChildren) {
         mimeType: image.mimeType,
         width: image.width,
         height: image.height,
+        size: image.size,
+        availability: "unknown",
         sourceName: image.name,
         promptSnapshot: {
           userPrompt: "",
@@ -183,18 +212,56 @@ export function SourceImageProvider({ children }: PropsWithChildren) {
     [promptSettings.version],
   );
 
-  const confirmSource = useCallback((id: string) => {
-    localStorage.setItem(CURRENT_SOURCE_KEY, id);
-    setCurrentSourceId(id);
-  }, []);
+  const confirmSource = useCallback(async (id: string) => {
+    const asset = history.find((item) => item.id === id);
+    if (!asset) throw new Error("找不到要确认的源图记录。");
+    setTaskError("");
+    try {
+      const [dimensions, bytes] = await Promise.all([
+        getImageDimensions(asset.dataUrl),
+        Promise.resolve(imageBytes(asset.dataUrl, asset.mimeType)),
+      ]);
+      const confirmed: SourceImageAsset = {
+        ...asset,
+        width: dimensions.width,
+        height: dimensions.height,
+        size: bytes.byteLength,
+        confirmedAt: new Date().toISOString(),
+        contentSnapshotId: await contentSnapshotId(bytes),
+        availability: "available",
+      };
+      await saveSourceImage(confirmed);
+      setHistory((current) => current.map((item) => (item.id === id ? confirmed : item)));
+      localStorage.setItem(CURRENT_SOURCE_KEY, id);
+      setCurrentSourceId(id);
+    } catch (error) {
+      const unavailable: SourceImageAsset = { ...asset, availability: "unavailable" };
+      await saveSourceImage(unavailable).catch(() => undefined);
+      setHistory((current) => current.map((item) => (item.id === id ? unavailable : item)));
+      const message = error instanceof Error ? error.message : "源图无法读取。";
+      setTaskError(message);
+      throw new Error(message);
+    }
+  }, [history]);
 
   const removeSourceImage = useCallback(
     async (id: string) => {
-      await deleteSourceImage(id);
-      setHistory((current) => current.filter((item) => item.id !== id));
-      if (currentSourceId === id) {
-        localStorage.removeItem(CURRENT_SOURCE_KEY);
-        setCurrentSourceId(null);
+      setTaskError("");
+      try {
+        await deleteSourceImage(id);
+        setHistory((current) => current.filter((item) => item.id !== id));
+        if (currentSourceId === id) {
+          localStorage.removeItem(CURRENT_SOURCE_KEY);
+          setCurrentSourceId(null);
+        }
+      } catch (error) {
+        setTaskError(
+          error instanceof SourceImageInUseError
+            ? "该源图已被序列任务引用，不能删除。"
+            : error instanceof Error
+              ? error.message
+              : "删除源图失败。",
+        );
       }
     },
     [currentSourceId],
@@ -206,7 +273,9 @@ export function SourceImageProvider({ children }: PropsWithChildren) {
       providersLoading,
       refreshProviders,
       history,
+      historyLoading,
       currentSourceId,
+      currentSource: history.find((item) => item.id === currentSourceId) ?? null,
       taskStatus,
       taskError,
       promptSettings,
@@ -223,6 +292,7 @@ export function SourceImageProvider({ children }: PropsWithChildren) {
       providersLoading,
       refreshProviders,
       history,
+      historyLoading,
       currentSourceId,
       taskStatus,
       taskError,

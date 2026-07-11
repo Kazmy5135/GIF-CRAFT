@@ -20,6 +20,16 @@ import {
 } from "./providers/mcp.js";
 import { generateWithOpenAI } from "./providers/openai.js";
 import { ProviderRequestError } from "./providers/types.js";
+import {
+  getSequenceProviderCapabilities,
+  type SequenceProviderCapabilitySummary,
+} from "./providers/sequence.js";
+import { parseSequenceJobSubmission } from "./sequenceRequest.js";
+import {
+  SequenceJobConflictError,
+  SequenceJobRateLimitError,
+  SequenceJobService,
+} from "./sequenceJobs.js";
 
 const rootDir = process.cwd();
 
@@ -118,6 +128,10 @@ function providerCapabilities(): ProviderCapabilities[] {
 const completedRequests = new Map<string, SourceImageGenerateResponse>();
 const inFlightRequests = new Map<string, Promise<SourceImageGenerateResponse>>();
 
+function singleRouteParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 async function executeGeneration(
   request: SourceImageGenerateRequest,
 ): Promise<SourceImageGenerateResponse> {
@@ -161,8 +175,16 @@ async function executeGeneration(
   };
 }
 
-export function createApp(): Express {
+export interface CreateAppOptions {
+  sequenceJobService?: SequenceJobService;
+  sequenceCapabilities?: SequenceProviderCapabilitySummary;
+}
+
+export function createApp(options: CreateAppOptions = {}): Express {
   const app = express();
+  const sequenceJobs = options.sequenceJobService || new SequenceJobService();
+  const sequenceCapabilities =
+    options.sequenceCapabilities || getSequenceProviderCapabilities();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "24mb" }));
 
@@ -171,7 +193,10 @@ export function createApp(): Express {
   });
 
   app.get("/api/providers", (_request, response) => {
-    response.json({ providers: providerCapabilities() });
+    response.json({
+      providers: providerCapabilities(),
+      sequenceProviders: [sequenceCapabilities],
+    });
   });
 
   app.get("/api/mcp/tools", async (_request, response) => {
@@ -249,6 +274,123 @@ export function createApp(): Express {
     } finally {
       inFlightRequests.delete(payload.clientRequestId);
     }
+  });
+
+  app.post("/api/sequence-jobs", (request: Request, response: Response) => {
+    const parsed = parseSequenceJobSubmission(request.body);
+    if (!parsed.success) {
+      response.status(400).json({
+        error: { code: "validation_failed", message: "序列任务参数不完整或无效。" },
+      });
+      return;
+    }
+    if (
+      parsed.data.request.providerExtensions?.proxyInstanceId !==
+      sequenceCapabilities.proxyInstanceId
+    ) {
+      response.status(409).json({
+        error: {
+          code: "status_unknown",
+          message: "代理实例已变化，旧请求不能自动重新提交；请创建新的显式任务。",
+          retryable: false,
+          recoveryAction: "reconcile",
+        },
+      });
+      return;
+    }
+    if (!sequenceCapabilities.configured) {
+      response.status(503).json({
+        error: {
+          code: "capability_unsupported",
+          message: sequenceCapabilities.unavailabilityReason || "序列服务当前不可用。",
+        },
+      });
+      return;
+    }
+    try {
+      const receipt = sequenceJobs.create(
+        parsed.data.request,
+        parsed.data.sourceImageDataUrl,
+      );
+      response.status(202).json(receipt);
+    } catch (error) {
+      if (error instanceof SequenceJobConflictError) {
+        response.status(409).json({
+          error: {
+            code: "validation_failed",
+            message: "同一个 clientRequestId 已用于不同的序列任务参数。",
+          },
+        });
+        return;
+      }
+      if (error instanceof SequenceJobRateLimitError) {
+        response.status(429).json({
+          error: {
+            code: "rate_limited",
+            message: "当前已有序列任务在执行，请等待其结束后再创建新任务。",
+            retryable: true,
+            recoveryAction: "retry",
+          },
+        });
+        return;
+      }
+      response.status(500).json({
+        error: { code: "request_failed", message: "无法创建本地序列任务。" },
+      });
+    }
+  });
+
+  app.get("/api/sequence-jobs/:jobId", (request: Request, response: Response) => {
+    const jobId = singleRouteParam(request.params.jobId);
+    const snapshot = jobId ? sequenceJobs.getSnapshot(jobId) : undefined;
+    if (!snapshot) {
+      response.status(404).json({
+        error: {
+          code: "status_unknown",
+          message: "代理中没有该任务记录；代理重启后无法向服务商对账。",
+        },
+      });
+      return;
+    }
+    response.json(snapshot);
+  });
+
+  app.get("/api/sequence-jobs/:jobId/result", (request: Request, response: Response) => {
+    const jobId = singleRouteParam(request.params.jobId);
+    const result = jobId ? sequenceJobs.getResult(jobId) : undefined;
+    if (result) {
+      response.json(result);
+      return;
+    }
+    const snapshot = jobId ? sequenceJobs.getSnapshot(jobId) : undefined;
+    if (!snapshot) {
+      response.status(404).json({
+        error: {
+          code: "status_unknown",
+          message: "代理中没有该任务记录；代理重启后结果状态未知。",
+        },
+      });
+      return;
+    }
+    if (snapshot.status === "completed") {
+      response.status(410).json({
+        error: {
+          code: "resource_unavailable",
+          message: "代理结果缓存已过期或因容量限制被清理。",
+          retryable: false,
+          recoveryAction: "none",
+        },
+      });
+      return;
+    }
+    response.status(409).json({
+      error: snapshot.error || {
+        code: "request_failed",
+        message: "任务尚未生成完整结果。",
+        retryable: false,
+        recoveryAction: "none",
+      },
+    });
   });
 
   return app;

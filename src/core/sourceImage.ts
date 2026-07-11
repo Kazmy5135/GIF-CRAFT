@@ -14,6 +14,14 @@ export type AspectRatio = (typeof aspectRatios)[number];
 export const qualityLevels = ["draft", "standard", "high"] as const;
 export type QualityLevel = (typeof qualityLevels)[number];
 
+export const sourceImageAvailabilityValues = [
+  "unknown",
+  "available",
+  "unavailable",
+] as const;
+export type SourceImageAvailability =
+  (typeof sourceImageAvailabilityValues)[number];
+
 export type SourceImageTaskStatus =
   | "idle"
   | "validating"
@@ -108,10 +116,17 @@ export interface SourceImageAsset {
   model: string;
   mode: SourceImageMode;
   createdAt: string;
+  /** Optional for IndexedDB v1 records; populated when an asset is confirmed again. */
+  confirmedAt?: string;
+  /** Stable identifier of the exact bytes used by a generation request. */
+  contentSnapshotId?: string;
   dataUrl: string;
   mimeType: string;
   width?: number;
   height?: number;
+  size?: number;
+  /** Optional for backward compatibility; an unknown value never passes sequence input guards. */
+  availability?: SourceImageAvailability;
   sourceName?: string;
   promptSnapshot: {
     userPrompt: string;

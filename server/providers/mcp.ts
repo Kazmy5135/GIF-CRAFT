@@ -21,10 +21,46 @@ export interface McpTool {
   };
 }
 
-interface McpCallResult {
+export interface McpCallResult {
   content?: unknown[];
   structuredContent?: Record<string, unknown>;
   isError?: boolean;
+}
+
+export const MCP_SEQUENCE_TOOL = "flowspace_module_1775547205956_bi14do";
+export const MCP_SEQUENCE_UPLOAD_TOOL = "gorilla_upload_media";
+
+export type McpSequenceModel = "fast" | "standard";
+
+export interface McpSequenceRequest {
+  prompt: string;
+  referenceImage: ReferenceImageSnapshot;
+  model: McpSequenceModel;
+  loop: boolean;
+}
+
+export interface McpSequenceVideoResult {
+  model: string;
+  remoteUrl: string;
+  providerNote?: string;
+}
+
+export function classifyMcpSequenceCallError(error: unknown): ProviderRequestError {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (/\b429\b|rate.?limit|too many requests/.test(message)) {
+    return new ProviderRequestError("MCP sequence provider is rate limited.", {
+      kind: "rate_limit",
+      retryable: true,
+    });
+  }
+  if (/\b(401|403)\b|auth|unauthori[sz]ed|forbidden|invalid token/.test(message)) {
+    return new ProviderRequestError("MCP sequence authentication failed.", {
+      kind: "authentication",
+      retryable: false,
+    });
+  }
+  const statusUnknown = message.includes("timeout") || message.includes("timed out");
+  return new ProviderRequestError("MCP sequence generation failed.", statusUnknown);
 }
 
 export interface McpImageProfile {
@@ -180,6 +216,39 @@ function setToolField(
   target[fieldName] = value;
 }
 
+export function buildMcpSequenceArguments(
+  tool: McpTool,
+  request: Pick<McpSequenceRequest, "prompt" | "model" | "loop">,
+  uploadedAssetUrl: string,
+): Record<string, unknown> {
+  const args: Record<string, unknown> = {};
+  setToolField(tool, "首帧", uploadedAssetUrl, args);
+  // The live Gorilla schema marks the optional tail input as required. An empty
+  // string preserves image-to-video semantics for one-shot actions; loops reuse
+  // the source image to constrain the generated endpoint.
+  setToolField(tool, "尾帧", request.loop ? uploadedAssetUrl : "", args);
+  setToolField(tool, "文本输入", request.prompt, args);
+  setToolField(
+    tool,
+    "model",
+    request.model === "standard"
+      ? "bytedance/doubao-seedance-2-0"
+      : "bytedance/doubao-seedance-2-0-fast",
+    args,
+  );
+  setToolField(tool, "ratio", "1:1", args);
+  setToolField(tool, "resolution", "480p", args);
+  setToolField(tool, "duration", "4", args);
+
+  const missingRequired = (tool.inputSchema.required || []).filter((field) => !(field in args));
+  if (missingRequired.length > 0) {
+    throw new ProviderRequestError(
+      `MCP sequence tool mapping is incomplete. Required fields: ${missingRequired.join(", ")}`,
+    );
+  }
+  return args;
+}
+
 function bananaResolution(quality: SourceImageGenerateRequest["quality"]): string {
   return quality === "draft" ? "0.5K" : quality === "high" ? "2K" : "1K";
 }
@@ -244,12 +313,17 @@ function validRemoteUrl(value: string): string | undefined {
       .map((host) => host.trim().toLowerCase())
       .filter(Boolean);
     const allowedHosts = new Set([mcpUrl.hostname.toLowerCase(), ...configuredHosts]);
-    return url.protocol === "https:" && allowedHosts.has(url.hostname.toLowerCase())
+    const safeAuthority = !url.username && !url.password && (!url.port || url.port === "443");
+    return url.protocol === "https:" && safeAuthority && allowedHosts.has(url.hostname.toLowerCase())
       ? url.href
       : undefined;
   } catch {
     return undefined;
   }
+}
+
+export function resolveAllowedMcpAssetUrl(value: string): string | undefined {
+  return validRemoteUrl(value);
 }
 
 function findNamedUrl(value: unknown, depth = 0): string | undefined {
@@ -287,6 +361,88 @@ function findNamedUrl(value: unknown, depth = 0): string | undefined {
 
 function findResultUrl(result: McpCallResult): string | undefined {
   return findNamedUrl(result.structuredContent) || findNamedUrl(result.content);
+}
+
+function findVideoResultUrl(value: unknown, depth = 0): string | undefined {
+  if (depth > 6 || !value) return undefined;
+  if (typeof value === "string") {
+    try {
+      return findVideoResultUrl(JSON.parse(value), depth + 1);
+    } catch {
+      const match = value.match(/(?:https?:\/\/[^\s"'<>]+|\/assets\/[^\s"'<>]+\.mp4(?:\?[^\s"'<>]*)?)/i);
+      if (!match) return undefined;
+      const allowed = validRemoteUrl(match[0]);
+      if (!allowed) return undefined;
+      try {
+        return new URL(allowed).pathname.toLowerCase().endsWith(".mp4") ? allowed : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findVideoResultUrl(item, depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  for (const key of ["videoUrl", "outputUrl", "videoUri", "video_uri"]) {
+    if (typeof record[key] !== "string") continue;
+    const found = validRemoteUrl(record[key]);
+    if (found) return found;
+  }
+  for (const [key, item] of Object.entries(record)) {
+    // assetUrl commonly echoes the uploaded input image. It is never accepted as
+    // a sequence output unless the provider also supplies an explicit video key.
+    if (key === "assetUrl" || key === "imageUrl") continue;
+    const found = findVideoResultUrl(item, depth + 1);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+export function parseMcpVideoResult(result: McpCallResult): {
+  remoteUrl: string;
+  note?: string;
+} {
+  if (result.isError) {
+    const errorText = (result.content || [])
+      .filter((item) => item && typeof item === "object")
+      .map((item) => (item as Record<string, unknown>).text)
+      .filter((text): text is string => typeof text === "string")
+      .join(" ")
+      .slice(0, 1_000);
+    const classified = classifyMcpSequenceCallError(new Error(errorText));
+    throw classified;
+  }
+  const remoteUrl =
+    findVideoResultUrl(result.structuredContent) || findVideoResultUrl(result.content);
+  if (!remoteUrl) throw new ProviderRequestError("MCP sequence tool returned no allowed video URL.", {
+    kind: "invalid_result",
+    retryable: false,
+  });
+  const notes = (result.content || [])
+    .filter(
+      (item): item is { type: "text"; text: string } =>
+        Boolean(
+          item &&
+            typeof item === "object" &&
+            (item as Record<string, unknown>).type === "text" &&
+            typeof (item as Record<string, unknown>).text === "string",
+        ),
+    )
+    .map((item) =>
+      item.text
+        .slice(0, 2_000)
+        .replace(/data:[^\s"']+/gi, "[redacted-data-url]")
+        .replace(/https?:\/\/[^\s"'<>]+/gi, "[redacted-url]")
+        .replace(/\/assets\/[^\s"'<>]+/gi, "[redacted-asset]")
+        .slice(0, 500),
+    );
+  return { remoteUrl, note: notes.length ? notes.join("\n").slice(0, 1_000) : undefined };
 }
 
 function findAssetReference(value: unknown, depth = 0): string | undefined {
@@ -495,4 +651,67 @@ export async function generateWithMcp(
       providerNote: parsed.note,
     };
   });
+}
+
+export async function generateSequenceVideoWithMcp(
+  request: McpSequenceRequest,
+): Promise<McpSequenceVideoResult> {
+  const config = getMcpProviderConfiguration();
+  if (!config.generationConfigured) {
+    throw new ProviderRequestError("MCP sequence provider is not configured.", {
+      kind: "capability",
+      retryable: false,
+    });
+  }
+
+  try {
+    return await withMcpClient(async (client) => {
+      const tools = await listToolsWithClient(client);
+      const sequenceTool = tools.find((item) => item.name === MCP_SEQUENCE_TOOL);
+      const uploadTool = tools.find((item) => item.name === MCP_SEQUENCE_UPLOAD_TOOL);
+      if (!sequenceTool || !uploadTool) {
+        throw new ProviderRequestError("Configured MCP sequence or upload tool was not found.", {
+          kind: "capability",
+          retryable: false,
+        });
+      }
+
+      const uploadedAssetUrl = await uploadReferenceImage(
+        client,
+        uploadTool,
+        request.referenceImage,
+      );
+      let result: McpCallResult;
+      try {
+        result = (await client.callTool(
+          {
+            name: sequenceTool.name,
+            arguments: buildMcpSequenceArguments(sequenceTool, request, uploadedAssetUrl),
+          },
+          undefined,
+          { timeout: 10 * 60_000 },
+        )) as McpCallResult;
+      } catch (error) {
+        throw classifyMcpSequenceCallError(error);
+      }
+
+      const parsed = parseMcpVideoResult(result);
+      return {
+        model:
+          request.model === "standard"
+            ? "bytedance/doubao-seedance-2-0"
+            : "bytedance/doubao-seedance-2-0-fast",
+        remoteUrl: parsed.remoteUrl,
+        providerNote: parsed.note,
+      };
+    });
+  } catch (error) {
+    if (
+      error instanceof ProviderRequestError &&
+      (error.kind !== "request_failed" || error.statusUnknown)
+    ) {
+      throw error;
+    }
+    throw classifyMcpSequenceCallError(error);
+  }
 }

@@ -1,50 +1,78 @@
 import type { SourceImageAsset } from "../../core/sourceImage";
+import {
+  committedRequestResult,
+  openGifCraftDatabase,
+  STORAGE_STORES,
+  transactionCommitted,
+} from "./database";
 
-const DB_NAME = "gif-craft";
-const DB_VERSION = 1;
-const STORE_NAME = "source-images";
-
-function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-    request.onerror = () => reject(request.error);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
-        store.createIndex("createdAt", "createdAt");
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-  });
+export class SourceImageInUseError extends Error {
+  constructor(id: string) {
+    super(`源图 ${id} 已被序列任务引用，不能删除。`);
+    this.name = "SourceImageInUseError";
+  }
 }
 
-async function withStore<T>(
-  mode: IDBTransactionMode,
-  operation: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  const db = await openDatabase();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, mode);
-    const request = operation(transaction.objectStore(STORE_NAME));
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => db.close();
-    transaction.onerror = () => reject(transaction.error);
-  });
+function isSourceImageAsset(value: unknown): value is SourceImageAsset {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Partial<SourceImageAsset>;
+  return (
+    typeof record.id === "string" &&
+    typeof record.createdAt === "string" &&
+    typeof record.dataUrl === "string" &&
+    typeof record.mimeType === "string"
+  );
 }
 
 export async function listSourceImages(): Promise<SourceImageAsset[]> {
-  const items = await withStore<SourceImageAsset[]>("readonly", (store) =>
-    store.getAll(),
+  const database = await openGifCraftDatabase();
+  const transaction = database.transaction(STORAGE_STORES.sourceImages, "readonly");
+  const items = await committedRequestResult<unknown[]>(
+    transaction.objectStore(STORAGE_STORES.sourceImages).getAll(),
+    transaction,
   );
-  return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return items
+    .filter(isSourceImageAsset)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getSourceImage(id: string): Promise<SourceImageAsset | undefined> {
+  const database = await openGifCraftDatabase();
+  const transaction = database.transaction(STORAGE_STORES.sourceImages, "readonly");
+  const item = await committedRequestResult<unknown>(
+    transaction.objectStore(STORAGE_STORES.sourceImages).get(id),
+    transaction,
+  );
+  return isSourceImageAsset(item) ? item : undefined;
 }
 
 export async function saveSourceImage(asset: SourceImageAsset): Promise<void> {
-  await withStore<IDBValidKey>("readwrite", (store) => store.put(asset));
+  const database = await openGifCraftDatabase();
+  const transaction = database.transaction(STORAGE_STORES.sourceImages, "readwrite");
+  const committed = transactionCommitted(transaction);
+  transaction.objectStore(STORAGE_STORES.sourceImages).put(asset);
+  await committed;
 }
 
 export async function deleteSourceImage(id: string): Promise<void> {
-  await withStore<undefined>("readwrite", (store) => store.delete(id));
+  const database = await openGifCraftDatabase();
+  const transaction = database.transaction(
+    [STORAGE_STORES.sourceImages, STORAGE_STORES.generationJobs],
+    "readwrite",
+  );
+  let guardError: SourceImageInUseError | undefined;
+  const committed = transactionCommitted(transaction).catch((error: unknown) => {
+    throw guardError ?? error;
+  });
+  const jobs = transaction.objectStore(STORAGE_STORES.generationJobs);
+  const countRequest = jobs.index("sourceImageId").count(id);
+  countRequest.onsuccess = () => {
+    if (countRequest.result > 0) {
+      guardError = new SourceImageInUseError(id);
+      transaction.abort();
+      return;
+    }
+    transaction.objectStore(STORAGE_STORES.sourceImages).delete(id);
+  };
+  await committed;
 }

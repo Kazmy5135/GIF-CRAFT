@@ -268,7 +268,10 @@ export function ImagePage() {
           ) : (
             <div className="result-grid">
               {history.map((asset) => {
-                const confirmed = currentSourceId === asset.id;
+                const confirmed =
+                  currentSourceId === asset.id &&
+                  Boolean(asset.confirmedAt && asset.contentSnapshotId) &&
+                  asset.availability === "available";
                 return (
                   <article className={`result-card${confirmed ? " confirmed" : ""}`} key={asset.id}>
                     <a href={asset.dataUrl} target="_blank" rel="noreferrer" title="打开原图">
@@ -296,7 +299,7 @@ export function ImagePage() {
                       </details>
                     </div>
                     <div className="button-row card-actions">
-                      <button className="button primary" type="button" onClick={() => confirmSource(asset.id)} disabled={confirmed}>
+                      <button className="button primary" type="button" onClick={() => void confirmSource(asset.id).catch(() => undefined)} disabled={confirmed}>
                         {confirmed ? "已确认" : "确认为源图"}
                       </button>
                       <a
@@ -309,7 +312,7 @@ export function ImagePage() {
                       <button className="button" type="button" onClick={() => reuseAsset(asset)}>
                         复用参数
                       </button>
-                      <button className="button danger" type="button" onClick={() => void removeSourceImage(asset.id)}>
+                      <button className="button danger" type="button" onClick={() => void removeSourceImage(asset.id).catch(() => undefined)}>
                         删除记录
                       </button>
                     </div>
