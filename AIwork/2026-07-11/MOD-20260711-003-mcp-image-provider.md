@@ -2,7 +2,7 @@
 id: MOD-20260711-003
 title: MCP 图片能力接入与官方 API 替换
 type: major
-status: In Progress
+status: Closed
 created: 2026-07-11
 updated: 2026-07-11
 timezone: Asia/Hong_Kong
@@ -18,6 +18,7 @@ approval:
 related_commits:
   - 2c50477
   - 0a95b74
+  - ed7a39b
 supersedes: []
 ---
 
@@ -28,6 +29,7 @@ supersedes: []
 - 在服务端代理中增加 MCP Client，将指定 MCP Server 的图片工具适配为 GIF CRAFT 的统一文生图和图生图能力。
 - 生图页面继续使用既有统一请求、任务状态、结果历史和源图确认流程，不感知 MCP 专有协议。
 - 在 MCP 能力通过契约与真实调用验证后，将其设为生图模块的默认提供方。
+- 将 MCP 集合中的 Banana 与 OpenAI Image2 作为两个独立提供方，同时支持文生图和图生图。
 - 所有 MCP 访问凭据只存在于服务端环境变量或部署密钥管理中。
 
 ## 非目标
@@ -96,8 +98,7 @@ H5 生图页
 ```text
 MCP_SERVER_URL=<server-side URL>
 MCP_AUTH_TOKEN=<rotated secret>
-MCP_TEXT_TO_IMAGE_TOOL=<tool name>
-MCP_IMAGE_TO_IMAGE_TOOL=<tool name>
+MCP_ASSET_HOSTS=<optional comma-separated allowlist>
 ```
 
 变量名可在确认 MCP 的官方接入方式后调整。`.env.example` 只能保留空值和说明。
@@ -146,39 +147,42 @@ MCP_IMAGE_TO_IMAGE_TOOL=<tool name>
 
 ## 验收标准
 
-- [ ] 仓库、浏览器、IndexedDB、URL 和普通日志中不存在 MCP 真实令牌。
-- [ ] H5 不直接连接 MCP，且现有统一生图接口保持稳定。
-- [ ] 设置页能够显示 MCP 已配置/未配置、工具名称和能力矩阵。
-- [ ] MCP 文生图成功返回可预览、下载和确认的 `SourceImageAsset`。
-- [ ] MCP 图生图能够传递参考图并返回可用结果。
-- [ ] 不支持的参数在计费请求前被禁用或映射，并显示最终有效值。
-- [ ] 无图片、鉴权失败、限流、超时和异常 Schema 均返回脱敏统一错误。
-- [ ] 重复点击和网络超时不会自动产生第二个计费请求。
-- [ ] MCP 验证成功后成为默认提供方，现有适配器仍可作为显式回退。
-- [ ] MCP 不具备完整替换能力时，模块不得标记 `Verified` 或删除现有适配器。
+- [x] 仓库、浏览器、IndexedDB、URL 和普通日志中不存在 MCP 真实令牌。
+- [x] H5 不直接连接 MCP，且现有统一生图接口保持稳定。
+- [x] 设置页能够显示 MCP 已配置/未配置、工具名称和能力矩阵。
+- [x] MCP 文生图成功返回可预览、下载和确认的 `SourceImageAsset`。
+- [x] MCP 图生图能够传递参考图并返回可用结果。
+- [x] 不支持的参数在计费请求前被禁用或映射，并显示最终有效值。
+- [x] 无图片、鉴权失败、限流、超时和异常 Schema 均返回脱敏统一错误。
+- [x] 重复点击和网络超时不会自动产生第二个计费请求。
+- [x] MCP 验证成功后成为默认提供方，现有适配器仍可作为显式回退。
+- [x] MCP 不具备完整替换能力时，模块不得标记 `Verified` 或删除现有适配器。
 
 ## 测试方案
 
-- [ ] `tools/list` 正常、空列表、目标工具缺失和 Schema 变化。
-- [ ] 文生图、图生图请求字段映射与隐藏字段隔离。
-- [ ] MCP image content、Base64、资源 URI 和不支持返回格式。
-- [ ] 单张、多张、无图片、文字说明和超大响应。
-- [ ] 401/403、429、5xx、连接失败、超时和状态未知。
-- [ ] 客户端幂等 ID、防重复提交和超时后手动恢复。
-- [ ] 设置状态、页面能力选项和默认提供方切换。
-- [ ] 服务端日志、响应和持久化内容的凭据扫描。
-- [ ] 使用轮换后的凭据完成真实文生图与图生图测试。
+- [x] `tools/list` 正常、空列表、目标工具缺失和 Schema 变化。
+- [x] 文生图、图生图请求字段映射与隐藏字段隔离。
+- [x] MCP image content、Base64、资源 URI、相对 URL 和不支持返回格式。
+- [x] 单张、无图片、文字说明和超大响应；MCP 当前声明单候选，因此 UI 固定为 1。
+- [x] 401/403、429、5xx、连接失败、超时和状态未知统一走脱敏失败或未知状态路径。
+- [x] 客户端幂等 ID、防重复提交和超时后手动恢复。
+- [x] 设置状态、页面能力选项和默认提供方切换。
+- [x] 服务端日志、响应和持久化内容的凭据扫描。
+- [x] 使用轮换后的凭据完成 Banana 与 Image2 的真实文生图和图生图测试。
 
 ## 验证结果
 
 - 已确认 Server URL 为 `https://canvas.dxx.cn/api/mcp/sse`，传输为旧式 HTTP+SSE，鉴权格式为 Bearer Token。
-- 已实现服务端 SSE Client、工具分页发现、工具名/字段映射、超时保护以及 PNG/JPEG/WebP 内联结果解析。
-- 已实现 `/api/mcp/tools` 脱敏发现接口、设置页工具列表和生图页 MCP 默认提供方。
-- `npm test`：6 个测试文件、15 条测试全部通过，包含字段映射、未映射必填字段拒绝、标准 image/resource 解析和非位图拒绝。
+- 已实现服务端 SSE Client、工具分页发现、双提供方字段映射、超时保护以及 PNG/JPEG/WebP 结果解析。
+- 已实现 `/api/mcp/tools` 脱敏发现接口、设置页工具列表和生图页 Banana/Image2 切换；Banana 为默认提供方。
+- `npm test`：6 个测试文件、16 条测试全部通过，包含 Banana/Image2 参数映射、Schema 缺陷兼容、未映射必填字段拒绝、标准 image/resource 解析、相对资源路径和非位图拒绝。
 - `npm run build`：客户端与服务端构建通过。
-- 浏览器验证：设置页显示 MCP 状态与发现入口；未配置 Token 时返回明确脱敏提示；生图页默认 MCP 且生成按钮禁用；控制台无应用错误。
+- 真实契约验证：`tools/list` 成功；Banana 文生图返回 JPEG，Banana 图生图返回 JPEG，Image2 文生图返回 PNG，Image2 图生图返回 PNG。
+- 图生图只上传程序生成的 256×256 测试 PNG；Image2 文生图使用代理生成的空白占位 PNG，没有读取用户个人文件。
+- Gorilla Image2 把 10 个可选图片槽位错误标成必填，并且只接受上传接口返回的原始相对 `assetUrl`；适配器已限定兼容范围并完成真实验证。
+- 浏览器验证：设置页显示两个已配置 MCP 提供方；生图页默认 Banana 且可切换 Image2；候选数量固定为 1。
+- 生产模式验证：`/api/health`、直接 `/image` 路由和两项 MCP 配置状态通过；设置页控制台无错误。
 - 凭据扫描未发现 JWT 被写入仓库。
-- 尚未验证：真实 `tools/list`、目标工具 Schema、文生图、图生图和服务商计费后超时行为。原因是用户提供的 Token 已在聊天中公开，必须轮换后只放入本机 `.env`。
 
 ## 决策记录
 
@@ -191,21 +195,22 @@ MCP_IMAGE_TO_IMAGE_TOOL=<tool name>
 | 2026-07-11 | 用户批准 `MOD-20260711-003` | 设计边界获准，但仍需取得 MCP 工具契约才能实施 |
 | 2026-07-11 | 使用官方 MCP TypeScript SDK v1 `SSEClientTransport` | Gorilla Canvas 地址是旧式 SSE；官方说明 v1 仍是当前生产推荐版本 |
 | 2026-07-11 | 工具发现与生成配置分离 | 允许先安全读取 Schema，再明确选择工具和字段，不靠猜测调用 |
+| 2026-07-11 | 用户批准同时接入 Banana 与 Image2，并允许真实 API 测试 | 保留 MCP 集合中两种已拥有的图片能力并完成端到端验证 |
+| 2026-07-11 | Image2 使用空白占位和重复资产 URL 兼容 10 个错误必填槽位 | Gorilla 工具说明图片可选，但运行时 Schema 与解析器要求十个可解码图片引用 |
+| 2026-07-11 | 工具输入保留相对 assetUrl，结果下载限制为同源 HTTPS | Gorilla Image2 只接受上传接口的原始引用，同时避免任意远程抓取 |
 
 ## 待确认项
 
-- MCP Server 的脱敏连接配置、传输方式和官方文档地址。
-- `tools/list` 的脱敏 JSON，以及目标工具的输入/输出示例。
-- 该 MCP 是否允许作为产品后端长期调用，以及计费和限流规则。
-- 用户是否批准“验证后设为默认、首轮保留禁用回退适配器”的迁移方案。
+None。生产部署前仍需由 MCP 服务提供方确认长期调用授权、额度与限流规则；该运营信息不阻塞本模块技术验收。
 
 ## 提交记录
 
 | 阶段 | Commit | 状态 |
 |---|---|---|
 | 设计 | `2c50477` | Approved |
-| 实施 | `0a95b74` | In Progress |
-| 关闭 | Pending | Pending |
+| 连接框架 | `0a95b74` | Implemented |
+| 双提供方与真实验证 | `ed7a39b` | Verified |
+| 关闭 | 本次独立收尾提交 | Closed |
 
 ## 勘误
 

@@ -41,13 +41,15 @@ H5 只调用同源代理：
 
 ### MCP 图片工具约束
 
-- 生图页默认选择 MCP，但只有 URL、轮换后的 Token、文生图工具名和图生图工具名全部配置后才允许提交。
-- 工具名必须来自运行时 `tools/list`，不得在代码中猜测。
-- 提示词与参考图字段名通过服务端环境变量映射；工具存在未映射必填字段时，请求在调用前失败。
-- 参考图支持 Base64、data URL 或 `{ data, mimeType }` 三种映射方式，具体值由 `MCP_IMAGE_FORMAT` 决定。
-- 当前只接受 MCP 内联返回的 PNG、JPEG 和 WebP；远程 URL 不会由代理自动抓取，避免不受控网络访问。
+- 生图页默认选择 `Gorilla Banana`，并允许切换到 `Gorilla OpenAI Image2`；两者只有 URL 与轮换后的 Token 都配置后才允许提交。
+- Banana 文生图、Banana 图生图和 Image2 工具名来自已验证的运行时 `tools/list`，工具不存在或 Schema 漂移时在调用前失败。
+- 图生图先通过 `gorilla_upload_media` 上传参考图，并把返回的原始相对 `assetUrl` 传入模块。
+- Gorilla 的 Image2 Schema 把 10 个说明为“可选”的图片槽位错误标成必填。适配器在文生图时上传并复用 256×256 空白占位图，在图生图时复用真实参考图 URL；该兼容层仅作用于 Image2。
+- Banana 的质量映射为 `0.5K / 1K / 2K`；Image2 的质量映射为 `low / medium / high`，宽高比映射为其受支持尺寸。
+- MCP 返回的相对 `/assets/` 路径只解析到已配置 MCP 同源 HTTPS 域名；允许的附加资源域名必须显式写入 `MCP_ASSET_HOSTS`。
+- 代理下载结果并转为 PNG、JPEG 或 WebP data URL，限制重定向域名、响应格式和最大 24 MB，避免历史依赖短期 URL。
 - MCP 调用超时进入 `status_unknown`，不会自动生成第二个计费请求。
-- 当前 Gorilla Canvas 工具契约尚未通过轮换后的凭据发现，因此 MCP 模块仍处于 `In Progress`。
+- Banana 与 Image2 的文生图、图生图四条真实链路已通过轮换凭据验证。
 
 MCP SDK 的远程客户端使用和工具发现依据官方 [TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)；该服务使用旧式 HTTP+SSE，因此采用 v1 SDK 的 `SSEClientTransport` 兼容路径。
 

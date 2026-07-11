@@ -76,7 +76,7 @@ draft → queued → submitting → generating → processing → completed
 - 客户端采用 React、TypeScript、React Router 和 Vite，入口为 `src/main.tsx`，应用装配位于 `src/app/App.tsx`。
 - H5 负责模式切换、图片解码校验、提示词预览、任务状态、结果确认和 IndexedDB 历史。
 - Express 轻量代理位于 `server/index.ts`，负责请求校验、幂等保护、密钥隔离和服务商适配器调用。
-- Google Gemini 与 OpenAI 的厂商协议分别收敛在 `server/providers/gemini.ts` 和 `server/providers/openai.ts`。
+- Gorilla Canvas MCP、Google Gemini 与 OpenAI 的厂商协议分别收敛在 `server/providers/mcp.ts`、`server/providers/gemini.ts` 和 `server/providers/openai.ts`。MCP 通过服务端 SSE Client 调用，生图页将 Banana 与 Image2 显示为独立提供方。
 - 生产构建生成 `dist/` 客户端资源与 `dist-server/` 服务端资源；直接访问 H5 子路由由代理回退到 `index.html`。
 - 当前没有账户、云端项目和服务端素材持久化；生图结果与非敏感模板覆盖保存在浏览器本地。
 

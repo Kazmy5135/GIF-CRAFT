@@ -14,7 +14,7 @@ copy .env.example .env
 npm run dev
 ```
 
-默认访问 `http://localhost:5173`。`.env` 中的 `GEMINI_API_KEY` 与 `OPENAI_API_KEY` 只由服务端代理读取；不配置密钥时，本地图片直通和界面仍可使用，AI 生成按钮会保持禁用。
+默认访问 `http://localhost:5173`。所有外部服务凭据只由服务端代理读取；不配置凭据时，本地图片直通和界面仍可使用，AI 生成按钮会保持禁用。
 
 ### Gorilla Canvas MCP
 
@@ -23,11 +23,9 @@ MCP 使用服务端 SSE 连接，真实令牌只放在本机 `.env`：
 ```env
 MCP_SERVER_URL=https://canvas.dxx.cn/api/mcp/sse
 MCP_AUTH_TOKEN=轮换后的新令牌
-MCP_TEXT_TO_IMAGE_TOOL=
-MCP_IMAGE_TO_IMAGE_TOOL=
 ```
 
-启动后进入“设置 → MCP 工具发现”，读取工具名称和输入 Schema。确认工具后再填写两个工具名以及 `.env.example` 中对应的参数字段映射。此前发送到聊天中的令牌均视为已暴露，不能继续使用。
+启动后，生图页默认提供“Gorilla Banana”和“Gorilla OpenAI Image2”，两者均支持文生图与图生图。设置页的“MCP 工具发现”可查看运行时工具名称和 Schema，不触发生图计费。此前发送到聊天中的令牌均视为已暴露，不能继续使用。
 
 生产构建与启动：
 
@@ -78,7 +76,7 @@ npm start
 ├─ MODULE_INDEX.md    当前模块职责、边界、依赖与阅读入口
 ├─ AIwork/            按日期保存大模块、工作记录和 Code Review
 ├─ docs/               产品、架构、AI 接入与路线图文档
-├─ server/             轻量代理与 Gemini/OpenAI 服务商适配器
+├─ server/             轻量代理与 Gorilla MCP、Gemini、OpenAI 适配器
 ├─ src/
 │  ├─ app/             应用装配、路由和全局生命周期
 │  ├─ features/        按用户能力划分的业务功能

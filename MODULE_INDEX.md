@@ -17,13 +17,13 @@
 |---|---|---|---|---|---|
 | `GOVERNANCE` | 项目治理 | Active | 变更分级、文档生命周期、模块导航和审查归档 | [`AGENTS.md`](AGENTS.md) | None |
 | `APP` | 应用外壳 | Active | H5 启动、左侧页签、路由、全局生命周期和依赖装配 | [`src/app/App.tsx`](src/app/App.tsx) | `SOURCE_IMAGE`, `SETTINGS` |
-| `SETTINGS` | 设置 | Active / Planning | API 配置状态和提示词模板覆盖；规划 MCP 连接状态 | [`src/features/settings/SettingsPage.tsx`](src/features/settings/SettingsPage.tsx) | `AI_GATEWAY`, `STORAGE`, `CORE` |
+| `SETTINGS` | 设置 | Active | API 配置状态、MCP 工具发现和提示词模板覆盖 | [`src/features/settings/SettingsPage.tsx`](src/features/settings/SettingsPage.tsx) | `AI_GATEWAY`, `STORAGE`, `CORE` |
 | `PROJECT` | 项目管理 | Planned | 项目元数据、草稿和项目级配置 | [`src/features`](src/features/README.md) | `CORE`, `STORAGE` |
-| `SOURCE_IMAGE` | 源图准备 | Active / Planning | 文生图、图生图、本地上传、结果历史与源图确认；规划 MCP 默认提供方 | [`src/features/source-image/SourceImageContext.tsx`](src/features/source-image/SourceImageContext.tsx) | `CORE`, `AI_GATEWAY`, `STORAGE`, `SETTINGS` |
+| `SOURCE_IMAGE` | 源图准备 | Active | 通过 Gorilla Banana、Image2 或本地上传准备、追踪并确认源图 | [`src/features/source-image/SourceImageContext.tsx`](src/features/source-image/SourceImageContext.tsx) | `CORE`, `AI_GATEWAY`, `STORAGE`, `SETTINGS` |
 | `GENERATION` | 图生序列帧编排 | Planned | 通过角色/场景预设和已确认源图创建游戏序列帧任务 | [`src/features`](src/features/README.md) | `CORE`, `AI_GATEWAY`, `STORAGE` |
 | `FRAME_WORKSPACE` | 帧工作区 | Planned | 帧预览、筛选、删除、排序和局部重试 | [`src/features`](src/features/README.md) | `CORE`, `GENERATION`, `SHARED` |
 | `EXPORT` | 导出 | Planned | 图片包及后续 GIF、WebP、视频导出 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE`, `FRAME_WORKSPACE` |
-| `AI_GATEWAY` | AI Gateway | Active / Planning | 已实现统一文生图、图生图与双服务商差异；规划 MCP 图片提供方 | [`server/providers`](server/providers) | `CORE` |
+| `AI_GATEWAY` | AI Gateway | Active | 统一文生图、图生图并适配 Gorilla MCP、Gemini 与 OpenAI 差异 | [`server/providers`](server/providers) | `CORE` |
 | `STORAGE` | 存储 | Active | 已实现源图历史与模板覆盖的浏览器本地存储；云端适配仍为规划 | [`src/infrastructure/storage`](src/infrastructure/storage) | `CORE` |
 | `CORE` | 核心领域 | Active | 已实现源图任务、资产、提示词与能力契约；其余领域对象按模块扩展 | [`src/core/sourceImage.ts`](src/core/sourceImage.ts) | None |
 | `SHARED` | 共享基础 | Planned | 跨模块 UI 基础、类型、错误和小型工具 | [`src/shared`](src/shared/README.md) | None |
@@ -67,7 +67,7 @@
 - **主要失败模式**：密钥泄漏、连接测试隐式计费、过期能力快照、模板覆盖无法复现。
 - **测试入口**：设置页通过 [`src/app/App.test.tsx`](src/app/App.test.tsx) 的路由装配测试覆盖；模板编译见 [`src/core/promptTemplates.test.ts`](src/core/promptTemplates.test.ts)。
 - **长期文档**：[`AI API 接入约定`](docs/AI_API.md)、[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md) 和 [`MOD-20260711-003`](AIwork/2026-07-11/MOD-20260711-003-mcp-image-provider.md)（待 MCP 契约）。
+- **有效设计**：已批准 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-003`](AIwork/2026-07-11/MOD-20260711-003-mcp-image-provider.md)。
 
 ### PROJECT — 项目管理
 
@@ -93,7 +93,7 @@
 - **主要失败模式**：上传图片无效、生成失败、资源过期、能力不支持、未确认结果被继续使用。
 - **测试入口**：[`src/app/App.test.tsx`](src/app/App.test.tsx)、[`src/features/source-image/imageFile.test.ts`](src/features/source-image/imageFile.test.ts)、[`src/core/promptTemplates.test.ts`](src/core/promptTemplates.test.ts)、[`server/providers/imageParsing.test.ts`](server/providers/imageParsing.test.ts)；真实 API 凭据契约测试待执行。
 - **长期文档**：[`项目定义`](docs/PROJECT.md)、[`系统架构`](docs/ARCHITECTURE.md) 和 [`AI API 接入约定`](docs/AI_API.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)、[`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md) 和 [`MOD-20260711-003`](AIwork/2026-07-11/MOD-20260711-003-mcp-image-provider.md)（待 MCP 契约）。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-003`](AIwork/2026-07-11/MOD-20260711-003-mcp-image-provider.md)。
 
 ### GENERATION — 图生序列帧编排
 
@@ -143,9 +143,9 @@
 - **依赖边界**：实现 `CORE` 中的网关契约；任何业务模块不得直接依赖服务商实现。
 - **核心不变量**：服务商专有字段不向核心和页面泄漏；凭据不进入仓库或普通日志。
 - **主要失败模式**：鉴权失败、限流、超时、回调丢失、错误映射不完整。
-- **测试入口**：[`server/providers/imageParsing.test.ts`](server/providers/imageParsing.test.ts)、[`server/providers/mcp.test.ts`](server/providers/mcp.test.ts)；Gorilla Canvas 真实工具发现和出图测试待配置轮换凭据后执行。
+- **测试入口**：[`server/providers/imageParsing.test.ts`](server/providers/imageParsing.test.ts)、[`server/providers/mcp.test.ts`](server/providers/mcp.test.ts)；Gorilla Banana 与 Image2 四条真实生图链路已验证。
 - **长期文档**：[`AI API 接入约定`](docs/AI_API.md)、[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)、[`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md) 和 [`MOD-20260711-003`](AIwork/2026-07-11/MOD-20260711-003-mcp-image-provider.md)（待 MCP 契约）。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-003`](AIwork/2026-07-11/MOD-20260711-003-mcp-image-provider.md)。
 
 ### STORAGE — 存储
 
