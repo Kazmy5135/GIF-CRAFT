@@ -13,6 +13,7 @@ import {
 import { compileSourceImagePrompt } from "../src/core/promptTemplates.js";
 import { generateWithGemini } from "./providers/gemini.js";
 import {
+  MCP_IMAGE_PROFILES,
   generateWithMcp,
   getMcpProviderConfiguration,
   listMcpTools,
@@ -72,24 +73,19 @@ const generateRequestSchema = z
 function providerCapabilities(): ProviderCapabilities[] {
   const mcp = getMcpProviderConfiguration();
   return [
-    {
-      id: "mcp",
-      name: "Gorilla Canvas MCP",
+    ...MCP_IMAGE_PROFILES.map((profile): ProviderCapabilities => ({
+      id: profile.id,
+      name: profile.name,
       configured: mcp.generationConfigured,
-      model:
-        mcp.textToImageTool && mcp.imageToImageTool
-          ? `${mcp.textToImageTool} / ${mcp.imageToImageTool}`
-          : mcp.discoveryConfigured
-            ? "已连接配置，待选择工具"
-            : "待配置",
-      supportsTextToImage: Boolean(mcp.textToImageTool),
-      supportsImageToImage: Boolean(mcp.imageToImageTool),
-      supportsMultipleImages: true,
+      model: mcp.discoveryConfigured ? `${profile.textToImageTool} / ${profile.imageToImageTool}` : "待配置",
+      supportsTextToImage: true,
+      supportsImageToImage: true,
+      supportsMultipleImages: false,
       supportsTransparentBackground: false,
       supportsCancellation: false,
       aspectRatios: [...aspectRatios],
       qualityLevels: [...qualityLevels],
-    },
+    })),
     {
       id: "gemini",
       name: "Google Gemini / Nano Banana 2",
@@ -130,7 +126,7 @@ async function executeGeneration(
   const jobId = randomUUID();
 
   const result =
-    request.provider === "mcp"
+    request.provider === "mcp_banana" || request.provider === "mcp_image2"
       ? await generateWithMcp(providerRequest)
       : request.provider === "gemini"
       ? await generateWithGemini(

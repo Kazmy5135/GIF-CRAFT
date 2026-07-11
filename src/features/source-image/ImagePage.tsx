@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { compileSourceImagePrompt } from "../../core/promptTemplates";
 import {
@@ -48,7 +48,7 @@ export function ImagePage() {
     clearTaskError,
   } = useSourceImages();
   const [mode, setMode] = useState<SourceImageMode>("text_to_image");
-  const [provider, setProvider] = useState<ProviderId>("mcp");
+  const [provider, setProvider] = useState<ProviderId>("mcp_banana");
   const [userPrompt, setUserPrompt] = useState("");
   const [referenceImage, setReferenceImage] = useState<ReferenceImageSnapshot>();
   const [changeIntent, setChangeIntent] = useState<"preserve" | "balanced" | "creative">("balanced");
@@ -71,6 +71,12 @@ export function ImagePage() {
           }),
     [mode, promptSettings, userPrompt, changeIntent],
   );
+
+  useEffect(() => {
+    if (selectedProvider && !selectedProvider.supportsMultipleImages && count !== 1) {
+      setCount(1);
+    }
+  }, [count, selectedProvider]);
 
   const invalidReason = useMemo(() => {
     if (mode === "local_upload") return referenceImage ? "" : "请先选择本地图片。";
@@ -220,7 +226,7 @@ export function ImagePage() {
                 <label className="field">
                   <span>候选数量</span>
                   <select value={count} onChange={(event) => setCount(Number(event.target.value))}>
-                    {[1, 2, 3, 4].map((value) => <option key={value}>{value}</option>)}
+                    {(selectedProvider?.supportsMultipleImages ? [1, 2, 3, 4] : [1]).map((value) => <option key={value}>{value}</option>)}
                   </select>
                 </label>
               </div>

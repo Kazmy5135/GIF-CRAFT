@@ -1,13 +1,17 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { SourceImageGenerateRequest } from "../../src/core/sourceImage";
 import {
-  buildMcpToolArguments,
+  MCP_IMAGE_PROFILES,
+  buildMcpProfileArguments,
   parseMcpImageResult,
   type McpTool,
 } from "./mcp";
 
+const imageFields = Array.from({ length: 10 }, (_, index) => `图像输入${index + 1}`);
+const imageProperties = Object.fromEntries(imageFields.map((field) => [field, { type: "string" }]));
+
 const request: SourceImageGenerateRequest = {
-  provider: "mcp",
+  provider: "mcp_banana",
   mode: "image_to_image",
   userPrompt: "keep the character, change the pose",
   basePrompt: "game asset",
@@ -27,42 +31,83 @@ const request: SourceImageGenerateRequest = {
   },
 };
 
-const tool: McpTool = {
-  name: "edit-image",
+const bananaEditTool: McpTool = {
+  name: MCP_IMAGE_PROFILES[0].imageToImageTool,
   inputSchema: {
     type: "object",
-    properties: { prompt: { type: "string" }, image: { type: "string" } },
-    required: ["prompt", "image"],
+    properties: {
+      文本输入: { type: "string" },
+      ...imageProperties,
+      aspectRatio: { type: "string" },
+      resolution: { type: "string" },
+    },
+    required: ["文本输入", ...imageFields],
   },
 };
 
 describe("MCP image provider", () => {
-  afterEach(() => {
-    for (const key of [
-      "MCP_PROMPT_FIELD",
-      "MCP_IMAGE_FIELD",
-      "MCP_IMAGE_FORMAT",
-      "MCP_ASPECT_RATIO_FIELD",
-      "MCP_QUALITY_FIELD",
-      "MCP_COUNT_FIELD",
-    ]) {
-      delete process.env[key];
-    }
-  });
-
-  it("maps only configured fields and uses a data URL for the reference image", () => {
-    expect(buildMcpToolArguments(tool, request)).toEqual({
-      prompt: request.userPrompt,
-      image: "data:image/png;base64,aGVsbG8=",
+  it("maps Banana editing fields and fills schema-bug optional image slots", () => {
+    const args = buildMcpProfileArguments(
+      bananaEditTool,
+      request,
+      MCP_IMAGE_PROFILES[0],
+      "https://assets.example/reference.png",
+    );
+    expect(args).toMatchObject({
+      文本输入: request.userPrompt,
+      图像输入1: "https://assets.example/reference.png",
+      图像输入2: "",
+      图像输入10: "",
+      aspectRatio: "1:1",
+      resolution: "1K",
     });
   });
 
-  it("refuses a tool with unmapped required fields", () => {
-    const incompatible: McpTool = {
-      ...tool,
-      inputSchema: { ...tool.inputSchema, required: ["prompt", "image", "workspace_id"] },
+  it("maps Image2 size and quality while allowing text-only generation", () => {
+    const image2 = MCP_IMAGE_PROFILES[1];
+    const tool: McpTool = {
+      name: image2.textToImageTool,
+      inputSchema: {
+        type: "object",
+        properties: {
+          文本输入: { type: "string" },
+          ...imageProperties,
+          size: { type: "string" },
+          quality: { type: "string" },
+          background: { type: "string" },
+        },
+        required: ["文本输入", ...imageFields],
+      },
     };
-    expect(() => buildMcpToolArguments(incompatible, request)).toThrow("workspace_id");
+    const args = buildMcpProfileArguments(
+      tool,
+      { ...request, provider: "mcp_image2", mode: "text_to_image", aspectRatio: "16:9", quality: "high", referenceImage: undefined },
+      image2,
+      "https://assets.example/transparent.png",
+    );
+    expect(args).toMatchObject({
+      文本输入: request.userPrompt,
+      图像输入1: "https://assets.example/transparent.png",
+      图像输入10: "https://assets.example/transparent.png",
+      size: "1824x1024",
+      quality: "high",
+      background: "opaque",
+    });
+  });
+
+  it("refuses unmapped required fields", () => {
+    const incompatible: McpTool = {
+      ...bananaEditTool,
+      inputSchema: { ...bananaEditTool.inputSchema, required: ["文本输入", ...imageFields, "workspace_id"] },
+    };
+    expect(() =>
+      buildMcpProfileArguments(
+        incompatible,
+        request,
+        MCP_IMAGE_PROFILES[0],
+        "https://assets.example/reference.png",
+      ),
+    ).toThrow("workspace_id");
   });
 
   it("parses standard MCP image content and embedded image resources", () => {
@@ -81,16 +126,24 @@ describe("MCP image provider", () => {
     expect(parsed.note).toBe("generation complete");
   });
 
+  it("extracts a remote result URL without accepting non-raster inline data", () => {
+    const previousServerUrl = process.env.MCP_SERVER_URL;
+    process.env.MCP_SERVER_URL = "https://canvas.dxx.cn/api/mcp/sse";
+    const parsed = parseMcpImageResult({
+      content: [
+        { type: "image", data: "PHN2Zz48L3N2Zz4=", mimeType: "image/svg+xml" },
+        { type: "text", text: JSON.stringify({ 图像输出: "/assets/result.png" }) },
+      ],
+    });
+    expect(parsed.images).toHaveLength(0);
+    expect(parsed.remoteUrl).toBe("https://canvas.dxx.cn/assets/result.png");
+    if (previousServerUrl === undefined) delete process.env.MCP_SERVER_URL;
+    else process.env.MCP_SERVER_URL = previousServerUrl;
+  });
+
   it("does not accept a tool error as an image result", () => {
     expect(() => parseMcpImageResult({ isError: true, content: [] })).toThrow(
       "reported an error",
     );
-  });
-
-  it("rejects non-raster image content", () => {
-    const parsed = parseMcpImageResult({
-      content: [{ type: "image", data: "PHN2Zz48L3N2Zz4=", mimeType: "image/svg+xml" }],
-    });
-    expect(parsed.images).toHaveLength(0);
   });
 });

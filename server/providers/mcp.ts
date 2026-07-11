@@ -3,6 +3,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type {
   GeneratedImagePayload,
+  ProviderId,
+  ReferenceImageSnapshot,
   SourceImageGenerateRequest,
 } from "../../src/core/sourceImage.js";
 import type { ProviderGenerationResult } from "./types.js";
@@ -25,11 +27,26 @@ interface McpCallResult {
   isError?: boolean;
 }
 
+export interface McpImageProfile {
+  id: Extract<ProviderId, "mcp_banana" | "mcp_image2">;
+  name: string;
+  textToImageTool: string;
+  imageToImageTool: string;
+  uploadTool: string;
+  promptField: string;
+  imageFields: string[];
+  aspectRatioField?: string;
+  resolutionField?: string;
+  sizeField?: string;
+  qualityField?: string;
+  backgroundField?: string;
+  duplicateImageAcrossFields?: boolean;
+  requiresTextPlaceholder?: boolean;
+}
+
 export interface McpProviderConfiguration {
   url: string;
   hasToken: boolean;
-  textToImageTool?: string;
-  imageToImageTool?: string;
   discoveryConfigured: boolean;
   generationConfigured: boolean;
 }
@@ -37,19 +54,65 @@ export interface McpProviderConfiguration {
 const MAX_TOOL_COUNT = 100;
 const MAX_IMAGE_DATA_LENGTH = 32 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const IMAGE_FIELDS = [
+  "图像输入1",
+  "图像输入2",
+  "图像输入3",
+  "图像输入4",
+  "图像输入5",
+  "图像输入6",
+  "图像输入7",
+  "图像输入8",
+  "图像输入9",
+  "图像输入10",
+];
+
+export const MCP_IMAGE_PROFILES: McpImageProfile[] = [
+  {
+    id: "mcp_banana",
+    name: "Gorilla Banana",
+    textToImageTool: "flowspace_module_1774248671772_hmmgdw",
+    imageToImageTool: "flowspace_module_1774928100822_ltprtx",
+    uploadTool: "gorilla_upload_media",
+    promptField: "文本输入",
+    imageFields: IMAGE_FIELDS,
+    aspectRatioField: "aspectRatio",
+    resolutionField: "resolution",
+  },
+  {
+    id: "mcp_image2",
+    name: "Gorilla OpenAI Image2",
+    textToImageTool: "flowspace_module_1776858044139_c8c3gg",
+    imageToImageTool: "flowspace_module_1776858044139_c8c3gg",
+    uploadTool: "gorilla_upload_media",
+    promptField: "文本输入",
+    imageFields: IMAGE_FIELDS,
+    sizeField: "size",
+    qualityField: "quality",
+    backgroundField: "background",
+    duplicateImageAcrossFields: true,
+    requiresTextPlaceholder: true,
+  },
+];
+
+const BLANK_PLACEHOLDER: ReferenceImageSnapshot = {
+  name: "gif-craft-blank-placeholder.png",
+  mimeType: "image/png",
+  data: "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAL3SURBVHhe7dQBAQAACMMg+5e+QQYhuAFZAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAwgQAYQKAMAFAmAAgTAAQJgAIEwCECQDCBABhAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAwgQAYQKAMAFAmAAgTAAQJgAIEwCECQDCBABhAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAwgQAYQKAMAFAmAAgTAAQJgAIEwCECQDCBABhAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAwgQAYQKAMAFAmAAgTAAQJgAIEwCECQDCBABhAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAwgQAYQKAMAFAmAAgTAAQJgAIEwCECQDCBABhAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAwgQAYQKAMAFAmAAgTAAQJgAIEwCECQDCBABhAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAwgQAYQKAMAFAmAAgTAAQJgAIEwCECQDCBABhAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAwgQAYQKAMAFAmAAgTAAQJgAIEwCECQDCBABhAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAwgQAYQKAMAFAmAAgTAAQJgAIEwCECQDCBABhAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAwgQAYQKAMAFAmAAgTAAQJgAIEwCECQDCBABhAoAwAUCYACBMABAmAAgTAIQJAMIEAGECgDABQJgAIEwAECYACBMAhAkAsrYH5lA7xVAlcS4AAAAASUVORK5CYII=",
+  width: 256,
+  height: 256,
+  size: 866,
+};
+let placeholderAssetCache: { serverUrl: string; assetUrl: string } | undefined;
 
 export function getMcpProviderConfiguration(): McpProviderConfiguration {
   const url = process.env.MCP_SERVER_URL?.trim() || "";
   const hasToken = Boolean(process.env.MCP_AUTH_TOKEN?.trim());
-  const textToImageTool = process.env.MCP_TEXT_TO_IMAGE_TOOL?.trim() || undefined;
-  const imageToImageTool = process.env.MCP_IMAGE_TO_IMAGE_TOOL?.trim() || undefined;
   return {
     url,
     hasToken,
-    textToImageTool,
-    imageToImageTool,
     discoveryConfigured: Boolean(url && hasToken),
-    generationConfigured: Boolean(url && hasToken && textToImageTool && imageToImageTool),
+    generationConfigured: Boolean(url && hasToken),
   };
 }
 
@@ -72,14 +135,12 @@ async function withMcpClient<T>(operation: (client: Client) => Promise<T>): Prom
   if (!config.discoveryConfigured) {
     throw new ProviderRequestError("MCP Server URL or token is not configured.");
   }
-
   const client = new Client({ name: "gif-craft", version: "0.1.0" });
   const transport = new SSEClientTransport(validatedMcpUrl(config.url), {
     requestInit: {
       headers: { Authorization: `Bearer ${process.env.MCP_AUTH_TOKEN?.trim()}` },
     },
   });
-
   try {
     await client.connect(transport);
     return await operation(client);
@@ -106,55 +167,63 @@ export async function listMcpTools(): Promise<McpTool[]> {
   return withMcpClient(listToolsWithClient);
 }
 
-function requireMappedField(
-  tool: McpTool,
-  fieldName: string,
-  value: unknown,
-  target: Record<string, unknown>,
-): void {
-  if (!tool.inputSchema.properties?.[fieldName]) {
-    throw new ProviderRequestError(`MCP tool is missing the configured field: ${fieldName}`);
-  }
-  target[fieldName] = value;
-}
-
-function optionalMappedField(
+function setToolField(
   tool: McpTool,
   fieldName: string | undefined,
   value: unknown,
   target: Record<string, unknown>,
 ): void {
   if (!fieldName) return;
-  requireMappedField(tool, fieldName, value, target);
+  if (!tool.inputSchema.properties?.[fieldName]) {
+    throw new ProviderRequestError(`MCP tool is missing the mapped field: ${fieldName}`);
+  }
+  target[fieldName] = value;
 }
 
-export function buildMcpToolArguments(
+function bananaResolution(quality: SourceImageGenerateRequest["quality"]): string {
+  return quality === "draft" ? "0.5K" : quality === "high" ? "2K" : "1K";
+}
+
+function image2Size(aspectRatio: SourceImageGenerateRequest["aspectRatio"]): string {
+  return {
+    "1:1": "1024x1024",
+    "3:2": "1536x1024",
+    "2:3": "1024x1536",
+    "16:9": "1824x1024",
+    "9:16": "1024x1824",
+  }[aspectRatio];
+}
+
+function image2Quality(quality: SourceImageGenerateRequest["quality"]): string {
+  return quality === "draft" ? "low" : quality === "high" ? "high" : "medium";
+}
+
+export function buildMcpProfileArguments(
   tool: McpTool,
   request: SourceImageGenerateRequest,
+  profile: McpImageProfile,
+  uploadedAssetUrl?: string,
 ): Record<string, unknown> {
   const args: Record<string, unknown> = {};
-  const promptField = process.env.MCP_PROMPT_FIELD?.trim() || "prompt";
-  requireMappedField(tool, promptField, request.userPrompt, args);
+  setToolField(tool, profile.promptField, request.userPrompt, args);
 
-  if (request.mode === "image_to_image") {
-    if (!request.referenceImage) {
-      throw new ProviderRequestError("MCP image-to-image request requires a reference image.");
-    }
-    const imageField = process.env.MCP_IMAGE_FIELD?.trim() || "image";
-    const imageFormat = process.env.MCP_IMAGE_FORMAT?.trim() || "data-url";
-    const image = request.referenceImage;
-    const imageValue =
-      imageFormat === "base64"
-        ? image.data
-        : imageFormat === "object"
-          ? { data: image.data, mimeType: image.mimeType }
-          : `data:${image.mimeType};base64,${image.data}`;
-    requireMappedField(tool, imageField, imageValue, args);
+  if (profile.imageFields.length > 0 && tool.inputSchema.properties?.[profile.imageFields[0]]) {
+    profile.imageFields.forEach((field, index) => {
+      const useAsset = Boolean(
+        uploadedAssetUrl && (index === 0 || profile.duplicateImageAcrossFields),
+      );
+      setToolField(tool, field, useAsset ? uploadedAssetUrl : "", args);
+    });
+  }
+  if (request.mode === "image_to_image" && !uploadedAssetUrl) {
+    throw new ProviderRequestError("MCP image-to-image request requires an uploaded asset URL.");
   }
 
-  optionalMappedField(tool, process.env.MCP_ASPECT_RATIO_FIELD?.trim(), request.aspectRatio, args);
-  optionalMappedField(tool, process.env.MCP_QUALITY_FIELD?.trim(), request.quality, args);
-  optionalMappedField(tool, process.env.MCP_COUNT_FIELD?.trim(), request.count, args);
+  setToolField(tool, profile.aspectRatioField, request.aspectRatio, args);
+  setToolField(tool, profile.resolutionField, bananaResolution(request.quality), args);
+  setToolField(tool, profile.sizeField, image2Size(request.aspectRatio), args);
+  setToolField(tool, profile.qualityField, image2Quality(request.quality), args);
+  setToolField(tool, profile.backgroundField, "opaque", args);
 
   const missingRequired = (tool.inputSchema.required || []).filter((field) => !(field in args));
   if (missingRequired.length > 0) {
@@ -165,13 +234,125 @@ export function buildMcpToolArguments(
   return args;
 }
 
+function validRemoteUrl(value: string): string | undefined {
+  try {
+    const mcpUrl = validatedMcpUrl(getMcpProviderConfiguration().url);
+    const relativeAsset = value.startsWith("/assets/");
+    const url = relativeAsset ? new URL(value, mcpUrl.origin) : new URL(value);
+    const configuredHosts = (process.env.MCP_ASSET_HOSTS || "")
+      .split(",")
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean);
+    const allowedHosts = new Set([mcpUrl.hostname.toLowerCase(), ...configuredHosts]);
+    return url.protocol === "https:" && allowedHosts.has(url.hostname.toLowerCase())
+      ? url.href
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function findNamedUrl(value: unknown, depth = 0): string | undefined {
+  if (depth > 6 || !value) return undefined;
+  if (typeof value === "string") {
+    try {
+      return findNamedUrl(JSON.parse(value), depth + 1);
+    } catch {
+      if (value.startsWith("/assets/")) return validRemoteUrl(value);
+      const match = value.match(/https?:\/\/[^\s"'<>]+/);
+      return match ? validRemoteUrl(match[0]) : undefined;
+    }
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findNamedUrl(item, depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  for (const key of ["assetUrl", "imageUrl", "outputUrl", "url"]) {
+    if (typeof record[key] === "string") {
+      const found = validRemoteUrl(record[key]);
+      if (found) return found;
+    }
+  }
+  for (const item of Object.values(record)) {
+    const found = findNamedUrl(item, depth + 1);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function findResultUrl(result: McpCallResult): string | undefined {
+  return findNamedUrl(result.structuredContent) || findNamedUrl(result.content);
+}
+
+function findAssetReference(value: unknown, depth = 0): string | undefined {
+  if (depth > 6 || !value) return undefined;
+  if (typeof value === "string") {
+    try {
+      return findAssetReference(JSON.parse(value), depth + 1);
+    } catch {
+      return value.startsWith("/assets/") ? value : validRemoteUrl(value);
+    }
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findAssetReference(item, depth + 1);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  if (typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.assetUrl === "string") {
+    return record.assetUrl.startsWith("/assets/")
+      ? record.assetUrl
+      : validRemoteUrl(record.assetUrl);
+  }
+  for (const item of Object.values(record)) {
+    const found = findAssetReference(item, depth + 1);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+async function uploadReferenceImage(
+  client: Client,
+  tool: McpTool,
+  image: ReferenceImageSnapshot,
+): Promise<string> {
+  const result = (await client.callTool(
+    {
+      name: tool.name,
+      arguments: {
+        dataUrl: `data:${image.mimeType};base64,${image.data}`,
+        filename: image.name,
+        purpose: "reference_image",
+      },
+    },
+    undefined,
+    { timeout: 60_000 },
+  )) as McpCallResult;
+  if (result.isError) throw new ProviderRequestError("MCP media upload failed.");
+  const assetUrl = findAssetReference(result);
+  if (!assetUrl) throw new ProviderRequestError("MCP upload returned no asset URL.");
+  return assetUrl;
+}
+
+async function getTextPlaceholderAsset(client: Client, uploadTool: McpTool): Promise<string> {
+  const serverUrl = getMcpProviderConfiguration().url;
+  if (placeholderAssetCache?.serverUrl === serverUrl) return placeholderAssetCache.assetUrl;
+  const assetUrl = await uploadReferenceImage(client, uploadTool, BLANK_PLACEHOLDER);
+  placeholderAssetCache = { serverUrl, assetUrl };
+  return assetUrl;
+}
+
 function imageFromBase64(data: string, mimeType: string): GeneratedImagePayload | undefined {
   if (!ALLOWED_IMAGE_TYPES.has(mimeType) || !data || data.length > MAX_IMAGE_DATA_LENGTH) return undefined;
-  return {
-    id: randomUUID(),
-    dataUrl: `data:${mimeType};base64,${data}`,
-    mimeType,
-  };
+  return { id: randomUUID(), dataUrl: `data:${mimeType};base64,${data}`, mimeType };
 }
 
 function imageFromDataUrl(value: string): GeneratedImagePayload | undefined {
@@ -202,11 +383,11 @@ function collectStructuredImages(value: unknown, images: GeneratedImagePayload[]
 export function parseMcpImageResult(result: McpCallResult): {
   images: GeneratedImagePayload[];
   note?: string;
+  remoteUrl?: string;
 } {
   if (result.isError) throw new ProviderRequestError("MCP tool reported an error.");
   const images: GeneratedImagePayload[] = [];
   const notes: string[] = [];
-
   for (const item of result.content || []) {
     if (!item || typeof item !== "object") continue;
     const content = item as Record<string, unknown>;
@@ -226,10 +407,35 @@ export function parseMcpImageResult(result: McpCallResult): {
     }
   }
   collectStructuredImages(result.structuredContent, images);
-
   return {
     images: images.slice(0, 4),
     note: notes.length ? notes.join("\n").slice(0, 1_000) : undefined,
+    remoteUrl: findResultUrl(result),
+  };
+}
+
+async function downloadMcpImage(remoteUrl: string): Promise<GeneratedImagePayload> {
+  const response = await fetch(remoteUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new ProviderRequestError("MCP image URL could not be downloaded.");
+  if (!validRemoteUrl(response.url)) {
+    throw new ProviderRequestError("MCP image URL redirected outside the configured allowlist.");
+  }
+  const mimeType = response.headers.get("content-type")?.split(";")[0] || "";
+  if (!ALLOWED_IMAGE_TYPES.has(mimeType)) {
+    throw new ProviderRequestError("MCP image URL returned an unsupported format.");
+  }
+  const declaredSize = Number(response.headers.get("content-length") || 0);
+  if (declaredSize > 24 * 1024 * 1024) {
+    throw new ProviderRequestError("MCP image result is too large.");
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.length === 0 || bytes.length > 24 * 1024 * 1024) {
+    throw new ProviderRequestError("MCP image result is empty or too large.");
+  }
+  return {
+    id: randomUUID(),
+    dataUrl: `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`,
+    mimeType,
   };
 }
 
@@ -237,21 +443,36 @@ export async function generateWithMcp(
   request: SourceImageGenerateRequest,
 ): Promise<ProviderGenerationResult> {
   const config = getMcpProviderConfiguration();
-  const toolName =
-    request.mode === "text_to_image" ? config.textToImageTool : config.imageToImageTool;
-  if (!config.generationConfigured || !toolName) {
-    throw new ProviderRequestError("MCP image tools have not been selected.");
+  const profile = MCP_IMAGE_PROFILES.find((item) => item.id === request.provider);
+  if (!config.generationConfigured || !profile) {
+    throw new ProviderRequestError("MCP image provider is not configured.");
   }
+  const toolName = request.mode === "text_to_image" ? profile.textToImageTool : profile.imageToImageTool;
 
   return withMcpClient(async (client) => {
-    const listed = await listToolsWithClient(client);
-    const tool = listed.find((item) => item.name === toolName);
+    const tools = await listToolsWithClient(client);
+    const tool = tools.find((item) => item.name === toolName);
+    const uploadTool = tools.find((item) => item.name === profile.uploadTool);
     if (!tool) throw new ProviderRequestError("Configured MCP image tool was not found.");
+
+    let uploadedAssetUrl: string | undefined;
+    if (request.mode === "image_to_image") {
+      if (!request.referenceImage || !uploadTool) {
+        throw new ProviderRequestError("MCP image upload tool or reference image is missing.");
+      }
+      uploadedAssetUrl = await uploadReferenceImage(client, uploadTool, request.referenceImage);
+    } else if (profile.requiresTextPlaceholder) {
+      if (!uploadTool) throw new ProviderRequestError("MCP image upload tool is missing.");
+      uploadedAssetUrl = await getTextPlaceholderAsset(client, uploadTool);
+    }
 
     let result: McpCallResult;
     try {
       result = (await client.callTool(
-        { name: toolName, arguments: buildMcpToolArguments(tool, request) },
+        {
+          name: toolName,
+          arguments: buildMcpProfileArguments(tool, request, profile, uploadedAssetUrl),
+        },
         undefined,
         { timeout: 180_000 },
       )) as McpCallResult;
@@ -261,12 +482,15 @@ export async function generateWithMcp(
     }
 
     const parsed = parseMcpImageResult(result);
+    if (parsed.images.length === 0 && parsed.remoteUrl) {
+      parsed.images.push(await downloadMcpImage(parsed.remoteUrl));
+    }
     if (parsed.images.length === 0) {
-      throw new ProviderRequestError("MCP tool returned no supported inline image.");
+      throw new ProviderRequestError("MCP tool returned no supported image.");
     }
     return {
       model: `mcp:${toolName}`,
-      providerSize: `${request.aspectRatio} · MCP`,
+      providerSize: `${request.aspectRatio} · ${profile.name}`,
       images: parsed.images,
       providerNote: parsed.note,
     };

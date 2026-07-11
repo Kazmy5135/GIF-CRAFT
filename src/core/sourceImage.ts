@@ -1,4 +1,4 @@
-export const providerIds = ["mcp", "gemini", "openai"] as const;
+export const providerIds = ["mcp_banana", "mcp_image2", "gemini", "openai"] as const;
 export type ProviderId = (typeof providerIds)[number];
 
 export const sourceImageModes = [
