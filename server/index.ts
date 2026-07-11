@@ -12,6 +12,11 @@ import {
 } from "../src/core/sourceImage.js";
 import { compileSourceImagePrompt } from "../src/core/promptTemplates.js";
 import { generateWithGemini } from "./providers/gemini.js";
+import {
+  generateWithMcp,
+  getMcpProviderConfiguration,
+  listMcpTools,
+} from "./providers/mcp.js";
 import { generateWithOpenAI } from "./providers/openai.js";
 import { ProviderRequestError } from "./providers/types.js";
 
@@ -65,7 +70,26 @@ const generateRequestSchema = z
   });
 
 function providerCapabilities(): ProviderCapabilities[] {
+  const mcp = getMcpProviderConfiguration();
   return [
+    {
+      id: "mcp",
+      name: "Gorilla Canvas MCP",
+      configured: mcp.generationConfigured,
+      model:
+        mcp.textToImageTool && mcp.imageToImageTool
+          ? `${mcp.textToImageTool} / ${mcp.imageToImageTool}`
+          : mcp.discoveryConfigured
+            ? "已连接配置，待选择工具"
+            : "待配置",
+      supportsTextToImage: Boolean(mcp.textToImageTool),
+      supportsImageToImage: Boolean(mcp.imageToImageTool),
+      supportsMultipleImages: true,
+      supportsTransparentBackground: false,
+      supportsCancellation: false,
+      aspectRatios: [...aspectRatios],
+      qualityLevels: [...qualityLevels],
+    },
     {
       id: "gemini",
       name: "Google Gemini / Nano Banana 2",
@@ -106,7 +130,9 @@ async function executeGeneration(
   const jobId = randomUUID();
 
   const result =
-    request.provider === "gemini"
+    request.provider === "mcp"
+      ? await generateWithMcp(providerRequest)
+      : request.provider === "gemini"
       ? await generateWithGemini(
           providerRequest,
           process.env.GEMINI_API_KEY || "",
@@ -150,6 +176,26 @@ export function createApp(): Express {
 
   app.get("/api/providers", (_request, response) => {
     response.json({ providers: providerCapabilities() });
+  });
+
+  app.get("/api/mcp/tools", async (_request, response) => {
+    const config = getMcpProviderConfiguration();
+    if (!config.discoveryConfigured) {
+      response.status(503).json({
+        error: { code: "request_failed", message: "MCP Server URL 或令牌尚未在服务端配置。" },
+      });
+      return;
+    }
+    try {
+      const tools = await listMcpTools();
+      response.json({
+        tools: tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
+      });
+    } catch {
+      response.status(502).json({
+        error: { code: "request_failed", message: "无法连接 MCP 或读取工具列表。" },
+      });
+    }
   });
 
   app.post("/api/source-images/generate", async (request: Request, response: Response) => {

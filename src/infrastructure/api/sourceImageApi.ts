@@ -1,5 +1,6 @@
 import type {
   ProviderCapabilities,
+  McpToolSummary,
   SourceImageErrorResponse,
   SourceImageGenerateRequest,
   SourceImageGenerateResponse,
@@ -13,6 +14,18 @@ export class SourceImageApiError extends Error {
   ) {
     super(message);
   }
+}
+
+export async function fetchMcpTools(): Promise<McpToolSummary[]> {
+  const response = await fetch("/api/mcp/tools");
+  const payload = (await response.json()) as
+    | { tools?: McpToolSummary[] }
+    | SourceImageErrorResponse;
+  if (!response.ok || "error" in payload) {
+    const message = "error" in payload ? payload.error.message : "无法读取 MCP 工具列表。";
+    throw new SourceImageApiError(message);
+  }
+  return payload.tools || [];
 }
 
 export async function fetchProviders(): Promise<ProviderCapabilities[]> {

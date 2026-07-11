@@ -2,7 +2,7 @@
 id: MOD-20260711-003
 title: MCP 图片能力接入与官方 API 替换
 type: major
-status: Approved
+status: In Progress
 created: 2026-07-11
 updated: 2026-07-11
 timezone: Asia/Hong_Kong
@@ -15,7 +15,8 @@ approval:
   state: approved
   approved_by: user
   approved_at: 2026-07-11
-related_commits: []
+related_commits:
+  - 2c50477
 supersedes: []
 ---
 
@@ -192,7 +193,7 @@ MCP_IMAGE_TO_IMAGE_TOOL=<tool name>
 
 | 阶段 | Commit | 状态 |
 |---|---|---|
-| 设计 | 本次独立设计提交 | Approved |
+| 设计 | `2c50477` | Approved |
 | 实施 | Pending | Pending |
 | 关闭 | Pending | Pending |
 

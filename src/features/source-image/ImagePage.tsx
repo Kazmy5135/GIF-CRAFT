@@ -48,7 +48,7 @@ export function ImagePage() {
     clearTaskError,
   } = useSourceImages();
   const [mode, setMode] = useState<SourceImageMode>("text_to_image");
-  const [provider, setProvider] = useState<ProviderId>("gemini");
+  const [provider, setProvider] = useState<ProviderId>("mcp");
   const [userPrompt, setUserPrompt] = useState("");
   const [referenceImage, setReferenceImage] = useState<ReferenceImageSnapshot>();
   const [changeIntent, setChangeIntent] = useState<"preserve" | "balanced" | "creative">("balanced");

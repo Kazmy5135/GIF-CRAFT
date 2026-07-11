@@ -1,4 +1,4 @@
-export const providerIds = ["gemini", "openai"] as const;
+export const providerIds = ["mcp", "gemini", "openai"] as const;
 export type ProviderId = (typeof providerIds)[number];
 
 export const sourceImageModes = [
@@ -88,6 +88,17 @@ export interface ProviderCapabilities {
   supportsCancellation: boolean;
   aspectRatios: AspectRatio[];
   qualityLevels: QualityLevel[];
+}
+
+export interface McpToolSummary {
+  name: string;
+  description?: string;
+  inputSchema: {
+    type: "object";
+    properties?: Record<string, object>;
+    required?: string[];
+    [key: string]: unknown;
+  };
 }
 
 export interface SourceImageAsset {

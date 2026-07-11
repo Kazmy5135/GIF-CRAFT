@@ -76,6 +76,10 @@ a { color: var(--accent); }
 .prompt-preview summary, .template-details summary { cursor: pointer; font-weight: 600; }
 pre { white-space: pre-wrap; word-break: break-word; background: #f3f3f3; padding: 10px; border-radius: 3px; color: #333; }
 
+.mcp-discovery { border-top: 1px solid var(--border); margin-top: 20px; padding-top: 20px; }
+.tool-list { display: grid; gap: 8px; margin-top: 12px; }
+.tool-list details { border: 1px solid var(--border); border-radius: 4px; padding: 10px; }
+
 .provider-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .provider-card { border: 1px solid var(--border); padding: 14px; border-radius: 4px; }
 .provider-card h3 { margin: 0 0 10px; }

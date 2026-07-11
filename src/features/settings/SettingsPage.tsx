@@ -4,6 +4,8 @@ import {
   BUILT_IN_NEGATIVE_PROMPT,
   BUILT_IN_PROMPT_VERSION,
 } from "../../core/promptTemplates";
+import type { McpToolSummary } from "../../core/sourceImage";
+import { fetchMcpTools } from "../../infrastructure/api/sourceImageApi";
 import { useSourceImages } from "../source-image/SourceImageContext";
 
 export function SettingsPage() {
@@ -18,6 +20,9 @@ export function SettingsPage() {
   const [basePrompt, setBasePrompt] = useState(promptSettings.basePrompt);
   const [negativePrompt, setNegativePrompt] = useState(promptSettings.negativePrompt);
   const [saved, setSaved] = useState(false);
+  const [mcpTools, setMcpTools] = useState<McpToolSummary[]>([]);
+  const [mcpToolsLoading, setMcpToolsLoading] = useState(false);
+  const [mcpToolsError, setMcpToolsError] = useState("");
 
   useEffect(() => {
     setBasePrompt(promptSettings.basePrompt);
@@ -36,6 +41,18 @@ export function SettingsPage() {
   function resetTemplates() {
     resetPromptSettings();
     setSaved(false);
+  }
+
+  async function discoverMcpTools() {
+    setMcpToolsLoading(true);
+    setMcpToolsError("");
+    try {
+      setMcpTools(await fetchMcpTools());
+    } catch (error) {
+      setMcpToolsError(error instanceof Error ? error.message : "无法读取 MCP 工具列表。");
+    } finally {
+      setMcpToolsLoading(false);
+    }
   }
 
   return (
@@ -75,7 +92,9 @@ export function SettingsPage() {
                   </div>
                   <div>
                     <dt>文生图 / 图生图</dt>
-                    <dd>支持 / 支持</dd>
+                    <dd>
+                      {provider.supportsTextToImage ? "支持" : "未选择"} / {provider.supportsImageToImage ? "支持" : "未选择"}
+                    </dd>
                   </div>
                   <div>
                     <dt>透明背景</dt>
@@ -86,6 +105,30 @@ export function SettingsPage() {
             ))}
           </div>
         )}
+
+        <div className="mcp-discovery">
+          <div className="section-heading">
+            <div>
+              <h3>MCP 工具发现</h3>
+              <p>只读取工具名称和输入 Schema，不触发生图计费。</p>
+            </div>
+            <button className="button" onClick={() => void discoverMcpTools()} disabled={mcpToolsLoading}>
+              {mcpToolsLoading ? "正在连接…" : "发现 MCP 工具"}
+            </button>
+          </div>
+          {mcpToolsError && <p className="status-warning" role="alert">{mcpToolsError}</p>}
+          {mcpTools.length > 0 && (
+            <div className="tool-list">
+              {mcpTools.map((tool) => (
+                <details key={tool.name}>
+                  <summary>{tool.name}</summary>
+                  {tool.description && <p>{tool.description}</p>}
+                  <pre>{JSON.stringify(tool.inputSchema, null, 2)}</pre>
+                </details>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="panel">
