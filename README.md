@@ -16,6 +16,19 @@ npm run dev
 
 默认访问 `http://localhost:5173`。`.env` 中的 `GEMINI_API_KEY` 与 `OPENAI_API_KEY` 只由服务端代理读取；不配置密钥时，本地图片直通和界面仍可使用，AI 生成按钮会保持禁用。
 
+### Gorilla Canvas MCP
+
+MCP 使用服务端 SSE 连接，真实令牌只放在本机 `.env`：
+
+```env
+MCP_SERVER_URL=https://canvas.dxx.cn/api/mcp/sse
+MCP_AUTH_TOKEN=轮换后的新令牌
+MCP_TEXT_TO_IMAGE_TOOL=
+MCP_IMAGE_TO_IMAGE_TOOL=
+```
+
+启动后进入“设置 → MCP 工具发现”，读取工具名称和输入 Schema。确认工具后再填写两个工具名以及 `.env.example` 中对应的参数字段映射。此前发送到聊天中的令牌均视为已暴露，不能继续使用。
+
 生产构建与启动：
 
 ```bash

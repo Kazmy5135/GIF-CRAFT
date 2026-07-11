@@ -143,7 +143,7 @@
 - **依赖边界**：实现 `CORE` 中的网关契约；任何业务模块不得直接依赖服务商实现。
 - **核心不变量**：服务商专有字段不向核心和页面泄漏；凭据不进入仓库或普通日志。
 - **主要失败模式**：鉴权失败、限流、超时、回调丢失、错误映射不完整。
-- **测试入口**：[`server/providers/imageParsing.test.ts`](server/providers/imageParsing.test.ts)；真实服务商成功响应契约测试待配置凭据后执行。
+- **测试入口**：[`server/providers/imageParsing.test.ts`](server/providers/imageParsing.test.ts)、[`server/providers/mcp.test.ts`](server/providers/mcp.test.ts)；Gorilla Canvas 真实工具发现和出图测试待配置轮换凭据后执行。
 - **长期文档**：[`AI API 接入约定`](docs/AI_API.md)、[`系统架构`](docs/ARCHITECTURE.md)。
 - **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)、[`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md) 和 [`MOD-20260711-003`](AIwork/2026-07-11/MOD-20260711-003-mcp-image-provider.md)（待 MCP 契约）。
 

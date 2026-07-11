@@ -32,11 +32,24 @@ H5 只调用同源代理：
 
 代理端当前适配：
 
+- Gorilla Canvas MCP：服务端通过官方 MCP TypeScript SDK v1 的兼容性 SSE Client 连接 `MCP_SERVER_URL`，Bearer 凭据由 `MCP_AUTH_TOKEN` 注入。`GET /api/mcp/tools` 只返回脱敏工具名称、说明和 `inputSchema`，用于完成工具与参数映射。
 - Google Gemini 官方 API，默认模型 `gemini-3.1-flash-image`。
 - OpenAI 官方 Image API，默认模型 `gpt-image-2`；文生图使用 `/v1/images/generations`，图生图使用 `/v1/images/edits`。
 - 密钥分别由服务端环境变量 `GEMINI_API_KEY` 和 `OPENAI_API_KEY` 注入；模型可通过 `GEMINI_IMAGE_MODEL`、`OPENAI_IMAGE_MODEL` 覆盖。
 - 同一个 `clientRequestId` 在单个代理进程内复用进行中或已完成结果，避免页面重复点击创建重复计费请求。
 - 首期只向 H5 暴露 `request_failed`、`status_unknown` 和 `no_valid_image` 级别的脱敏状态，不展示精细厂商错误分类。
+
+### MCP 图片工具约束
+
+- 生图页默认选择 MCP，但只有 URL、轮换后的 Token、文生图工具名和图生图工具名全部配置后才允许提交。
+- 工具名必须来自运行时 `tools/list`，不得在代码中猜测。
+- 提示词与参考图字段名通过服务端环境变量映射；工具存在未映射必填字段时，请求在调用前失败。
+- 参考图支持 Base64、data URL 或 `{ data, mimeType }` 三种映射方式，具体值由 `MCP_IMAGE_FORMAT` 决定。
+- 当前只接受 MCP 内联返回的 PNG、JPEG 和 WebP；远程 URL 不会由代理自动抓取，避免不受控网络访问。
+- MCP 调用超时进入 `status_unknown`，不会自动生成第二个计费请求。
+- 当前 Gorilla Canvas 工具契约尚未通过轮换后的凭据发现，因此 MCP 模块仍处于 `In Progress`。
+
+MCP SDK 的远程客户端使用和工具发现依据官方 [TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)；该服务使用旧式 HTTP+SSE，因此采用 v1 SDK 的 `SSEClientTransport` 兼容路径。
 
 ## 标准输入概念
 

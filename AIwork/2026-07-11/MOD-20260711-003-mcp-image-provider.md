@@ -17,6 +17,7 @@ approval:
   approved_at: 2026-07-11
 related_commits:
   - 2c50477
+  - 0a95b74
 supersedes: []
 ---
 
@@ -170,7 +171,14 @@ MCP_IMAGE_TO_IMAGE_TOOL=<tool name>
 
 ## 验证结果
 
-尚未验证。当前缺少 MCP Server 地址、传输方式、工具 Schema、响应样例和可安全使用的轮换凭据。
+- 已确认 Server URL 为 `https://canvas.dxx.cn/api/mcp/sse`，传输为旧式 HTTP+SSE，鉴权格式为 Bearer Token。
+- 已实现服务端 SSE Client、工具分页发现、工具名/字段映射、超时保护以及 PNG/JPEG/WebP 内联结果解析。
+- 已实现 `/api/mcp/tools` 脱敏发现接口、设置页工具列表和生图页 MCP 默认提供方。
+- `npm test`：6 个测试文件、15 条测试全部通过，包含字段映射、未映射必填字段拒绝、标准 image/resource 解析和非位图拒绝。
+- `npm run build`：客户端与服务端构建通过。
+- 浏览器验证：设置页显示 MCP 状态与发现入口；未配置 Token 时返回明确脱敏提示；生图页默认 MCP 且生成按钮禁用；控制台无应用错误。
+- 凭据扫描未发现 JWT 被写入仓库。
+- 尚未验证：真实 `tools/list`、目标工具 Schema、文生图、图生图和服务商计费后超时行为。原因是用户提供的 Token 已在聊天中公开，必须轮换后只放入本机 `.env`。
 
 ## 决策记录
 
@@ -181,6 +189,8 @@ MCP_IMAGE_TO_IMAGE_TOOL=<tool name>
 | 2026-07-11 | 首轮替换不删除现有官方适配器 | MCP 未验证前需要安全回退和差异对照 |
 | 2026-07-11 | 工具契约未知时不编写猜测适配器 | 工具名和 Schema 是实现所需事实 |
 | 2026-07-11 | 用户批准 `MOD-20260711-003` | 设计边界获准，但仍需取得 MCP 工具契约才能实施 |
+| 2026-07-11 | 使用官方 MCP TypeScript SDK v1 `SSEClientTransport` | Gorilla Canvas 地址是旧式 SSE；官方说明 v1 仍是当前生产推荐版本 |
+| 2026-07-11 | 工具发现与生成配置分离 | 允许先安全读取 Schema，再明确选择工具和字段，不靠猜测调用 |
 
 ## 待确认项
 
@@ -194,7 +204,7 @@ MCP_IMAGE_TO_IMAGE_TOOL=<tool name>
 | 阶段 | Commit | 状态 |
 |---|---|---|
 | 设计 | `2c50477` | Approved |
-| 实施 | Pending | Pending |
+| 实施 | `0a95b74` | In Progress |
 | 关闭 | Pending | Pending |
 
 ## 勘误
