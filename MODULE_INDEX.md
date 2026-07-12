@@ -16,16 +16,16 @@
 | ID | 模块 | 状态 | 主要职责 | 入口 | 直接依赖 |
 |---|---|---|---|---|---|
 | `GOVERNANCE` | 项目治理 | Active | 变更分级、文档生命周期、模块导航和审查归档 | [`AGENTS.md`](AGENTS.md) | None |
-| `APP` | 应用外壳 | Active | H5 启动、左侧页签、路由、全局生命周期和依赖装配 | [`src/app/App.tsx`](src/app/App.tsx) | `SOURCE_IMAGE`, `GENERATION`, `SETTINGS` |
+| `APP` | 应用外壳 | Active | H5 启动、左侧页签、路由、全局生命周期和依赖装配 | [`src/app/App.tsx`](src/app/App.tsx) | `SOURCE_IMAGE`, `GENERATION`, `FRAME_WORKSPACE`, `SETTINGS` |
 | `SETTINGS` | 设置 | Active | API 配置状态、MCP 工具发现和提示词模板覆盖 | [`src/features/settings/SettingsPage.tsx`](src/features/settings/SettingsPage.tsx) | `AI_GATEWAY`, `STORAGE`, `CORE` |
 | `PROJECT` | 项目管理 | Planned | 项目元数据、草稿和项目级配置 | [`src/features`](src/features/README.md) | `CORE`, `STORAGE` |
 | `SOURCE_IMAGE` | 源图准备 | Active | 通过 Gorilla Banana、Image2 或本地上传准备、追踪并确认源图 | [`src/features/source-image/SourceImageContext.tsx`](src/features/source-image/SourceImageContext.tsx) | `CORE`, `AI_GATEWAY`, `STORAGE`, `SETTINGS` |
 | `GENERATION` | 图生序列帧编排 | Active | 通过角色/场景预设和已确认源图创建、恢复并交接游戏序列帧任务 | [`src/features/sequence/SequencePage.tsx`](src/features/sequence/SequencePage.tsx) | `CORE`, `AI_GATEWAY`, `STORAGE`, `SOURCE_IMAGE` |
-| `FRAME_WORKSPACE` | 帧工作区 | Planned / Planning | 帧预览、筛选、删除、排序和局部重试 | [`src/features`](src/features/README.md) | `CORE`, `GENERATION`, `SHARED` |
+| `FRAME_WORKSPACE` | 帧工作区 | Active | 帧预览、审核、非破坏性移除/恢复、排序、候选重试和快照 | [`src/features/frame-workspace/FrameWorkspaceRoute.tsx`](src/features/frame-workspace/FrameWorkspaceRoute.tsx) | `CORE`, `GENERATION`, `STORAGE`, `SHARED` |
 | `EXPORT` | 导出 | Planned | 图片包及后续 GIF、WebP、视频导出 | [`src/infrastructure`](src/infrastructure/README.md) | `CORE`, `FRAME_WORKSPACE` |
 | `AI_GATEWAY` | AI Gateway | Active | 统一文生图、图生图、图生序列能力并适配 Gorilla MCP、Gemini 与 OpenAI 差异 | [`server/providers`](server/providers) | `CORE` |
-| `STORAGE` | 存储 | Active | 以统一 IndexedDB v2 保存源图、序列任务、帧 Blob 和非敏感配置 | [`src/infrastructure/storage/database.ts`](src/infrastructure/storage/database.ts) | `CORE` |
-| `CORE` | 核心领域 | Active | 定义源图、序列预设、生成任务、帧、提示词、状态机和能力契约 | [`src/core/sequenceGeneration.ts`](src/core/sequenceGeneration.ts) | None |
+| `STORAGE` | 存储 | Active | 以统一 IndexedDB v4 保存源图、序列任务、帧 Blob、工作区、候选、快照和非敏感配置 | [`src/infrastructure/storage/database.ts`](src/infrastructure/storage/database.ts) | `CORE` |
+| `CORE` | 核心领域 | Active | 定义源图、序列预设、生成任务、帧、工作区、快照、状态机和能力契约 | [`src/core/frameWorkspace.ts`](src/core/frameWorkspace.ts) | None |
 | `SHARED` | 共享基础 | Planned | 跨模块 UI 基础、类型、错误和小型工具 | [`src/shared`](src/shared/README.md) | None |
 
 ## 模块详情
@@ -54,7 +54,7 @@
 - **主要失败模式**：全局错误未隔离、路由状态丢失、基础设施泄漏到页面装配。
 - **测试入口**：[`src/app/App.test.tsx`](src/app/App.test.tsx)。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)、[`MOD-20260711-001`](AIwork/2026-07-11/MOD-20260711-001-basic-h5-ui-shell.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)、[`MOD-20260711-001`](AIwork/2026-07-11/MOD-20260711-001-basic-h5-ui-shell.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md) 和 [`MOD-20260712-001`](AIwork/2026-07-12/MOD-20260712-001-frame-workspace-mvp-plan.md)。
 
 ### SETTINGS — 设置
 
@@ -106,20 +106,20 @@
 - **主要失败模式**：对齐漂移、帧率映射不透明、预设版本不可复现、循环首尾跳变、重复提交、状态回退、结果帧索引混乱。
 - **测试入口**：[`src/core/sequenceGeneration.test.ts`](src/core/sequenceGeneration.test.ts)、[`src/features/sequence/SequenceContext.test.tsx`](src/features/sequence/SequenceContext.test.tsx)、[`src/features/sequence/SequencePage.test.tsx`](src/features/sequence/SequencePage.test.tsx)、[`src/infrastructure/api/sequenceApi.test.ts`](src/infrastructure/api/sequenceApi.test.ts)。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)、[`AI API 接入约定`](docs/AI_API.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)；已关闭 [`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)；已关闭 [`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md) 和 [`MOD-20260712-001`](AIwork/2026-07-12/MOD-20260712-001-frame-workspace-mvp-plan.md)。
 
 ### FRAME_WORKSPACE — 帧工作区
 
-- **职责**：连续帧预览、筛选、删除、稳定排序和指定帧重试入口。
-- **非职责**：不直接访问 AI 服务商，不实现最终导出编码。
-- **数据所有权**：工作区选择、展示顺序和帧审核状态；原始生成任务仍由 `GENERATION` 管理。
-- **输入/输出**：输入生成帧集合和用户编辑动作；输出经过整理的稳定帧序列。
-- **依赖边界**：依赖 `CORE`、`GENERATION` 和 `SHARED`；禁止绕过任务用例提交 AI 请求。
-- **核心不变量**：帧拥有稳定索引，删除和重试不破坏原始序列关系。
-- **主要失败模式**：排序漂移、资源失效、局部重试覆盖错误帧。
-- **测试入口**：尚未建立。
-- **长期文档**：[`项目定义`](docs/PROJECT.md)、[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)；规划中 [`MOD-20260712-001`](AIwork/2026-07-12/MOD-20260712-001-frame-workspace-mvp-plan.md)（Draft）。
+- **职责**：连续预览、逐帧审核与筛选、非破坏性移除/恢复、稳定排序、指定帧候选重试和不可变快照。
+- **非职责**：不直接访问 AI 服务商，不修改原始生成任务与原始帧，不实现最终导出编码。
+- **数据所有权**：工作区 revision、有序槽位、审核决策、原版/候选修订、重试尝试和不可变快照；原始生成任务仍由 `GENERATION` 管理。
+- **输入/输出**：输入已完整交接的生成任务、帧 Blob 和用户编辑动作；输出资源可读、顺序连续的 `FrameWorkspaceSnapshot`。
+- **依赖边界**：依赖 `CORE`、`GENERATION`、`STORAGE` 和 `SHARED`；重试通过统一 API 用例，禁止直接依赖服务商实现。
+- **核心不变量**：原始帧不可变；移除可恢复；排序不改写来源索引；候选必须显式接受；提交回执先于轮询持久化；快照只追加不覆写。
+- **主要失败模式**：排序漂移、资源失效、revision 冲突、提交回执丢失、重复外部任务、候选覆盖错误帧和对象 URL 泄漏。
+- **测试入口**：[`src/core/frameWorkspace.test.ts`](src/core/frameWorkspace.test.ts)、[`src/features/frame-workspace/FrameWorkspacePage.test.tsx`](src/features/frame-workspace/FrameWorkspacePage.test.tsx)、[`src/features/frame-workspace/defaultWorkspaceAdapter.test.ts`](src/features/frame-workspace/defaultWorkspaceAdapter.test.ts)、[`src/features/frame-workspace/defaultWorkspaceAdapter.integration.test.ts`](src/features/frame-workspace/defaultWorkspaceAdapter.integration.test.ts)、[`src/features/frame-workspace/objectUrlPool.test.ts`](src/features/frame-workspace/objectUrlPool.test.ts)、[`src/features/frame-workspace/usePreviewPlayback.test.ts`](src/features/frame-workspace/usePreviewPlayback.test.ts)、[`src/infrastructure/api/frameRetryService.test.ts`](src/infrastructure/api/frameRetryService.test.ts)、[`src/infrastructure/storage/frameWorkspaceRepository.test.ts`](src/infrastructure/storage/frameWorkspaceRepository.test.ts)。
+- **长期文档**：[`项目定义`](docs/PROJECT.md)、[`系统架构`](docs/ARCHITECTURE.md)、[`AI API 接入约定`](docs/AI_API.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)；已关闭 [`MOD-20260712-001`](AIwork/2026-07-12/MOD-20260712-001-frame-workspace-mvp-plan.md)。
 
 ### EXPORT — 导出
 
@@ -132,7 +132,7 @@
 - **主要失败模式**：浏览器内存不足、资源过期、编码失败、文件不完整。
 - **测试入口**：尚未建立。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)、[`路线图`](docs/ROADMAP.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md)；工作区输入契约已由关闭的 [`MOD-20260712-001`](AIwork/2026-07-12/MOD-20260712-001-frame-workspace-mvp-plan.md) 冻结。
 
 ### AI_GATEWAY — AI Gateway
 
@@ -145,33 +145,33 @@
 - **主要失败模式**：鉴权失败、限流、超时、代理重启、媒体资源不可信、抽帧不完整、错误映射不完整。
 - **测试入口**：[`server/providers/imageParsing.test.ts`](server/providers/imageParsing.test.ts)、[`server/providers/mcp.test.ts`](server/providers/mcp.test.ts)、[`server/providers/mcpSequence.test.ts`](server/providers/mcpSequence.test.ts)、[`server/providers/sequence.test.ts`](server/providers/sequence.test.ts)、[`server/providers/sequenceMedia.test.ts`](server/providers/sequenceMedia.test.ts)、[`server/sequenceJobs.test.ts`](server/sequenceJobs.test.ts)、[`server/index.test.ts`](server/index.test.ts)；Gorilla 生图链路与 Seedance 真实角色/场景序列链路已验证。
 - **长期文档**：[`AI API 接入约定`](docs/AI_API.md)、[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-003`](AIwork/2026-07-11/MOD-20260711-003-mcp-image-provider.md) 和 [`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-003`](AIwork/2026-07-11/MOD-20260711-003-mcp-image-provider.md)、[`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md) 和 [`MOD-20260712-001`](AIwork/2026-07-12/MOD-20260712-001-frame-workspace-mvp-plan.md)。
 
 ### STORAGE — 存储
 
-- **职责**：通过统一 IndexedDB v2 保存源图、序列任务、帧 Blob 和存储元数据，并执行容量预检、保留与安全清理。
+- **职责**：通过统一 IndexedDB v4 保存源图、序列任务、帧 Blob、工作区修订、候选 Blob、不可变快照和存储元数据，并执行容量预检、引用保护与安全清理。
 - **非职责**：不决定项目业务规则，不持久化未经允许的明文凭据。
 - **数据所有权**：持久化版本、序列化格式和存储迁移实现。
 - **输入/输出**：输入核心持久化契约和领域快照；输出恢复后的项目与任务状态。
 - **依赖边界**：实现 `CORE` 契约；功能模块不得直接绑定具体浏览器存储 API。
 - **核心不变量**：版本可识别，失败可恢复，敏感数据遵循最小保存原则。
 - **主要失败模式**：容量耗尽、序列化损坏、版本不兼容、清理误删。
-- **测试入口**：[`src/infrastructure/storage/database.test.ts`](src/infrastructure/storage/database.test.ts)、[`src/infrastructure/storage/sequenceJobRepository.test.ts`](src/infrastructure/storage/sequenceJobRepository.test.ts)、[`src/features/source-image/SourceImageContext.test.tsx`](src/features/source-image/SourceImageContext.test.tsx)。
+- **测试入口**：[`src/infrastructure/storage/database.test.ts`](src/infrastructure/storage/database.test.ts)、[`src/infrastructure/storage/sequenceJobRepository.test.ts`](src/infrastructure/storage/sequenceJobRepository.test.ts)、[`src/infrastructure/storage/frameWorkspaceRepository.test.ts`](src/infrastructure/storage/frameWorkspaceRepository.test.ts)、[`src/features/source-image/SourceImageContext.test.tsx`](src/features/source-image/SourceImageContext.test.tsx)。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md) 和 [`MOD-20260712-001`](AIwork/2026-07-12/MOD-20260712-001-frame-workspace-mvp-plan.md)。
 
 ### CORE — 核心领域
 
 - **职责**：定义领域对象、业务规则、任务状态、统一错误和用例契约。
 - **非职责**：不依赖 UI 框架、浏览器 API 或服务商 SDK。
-- **数据所有权**：`Project`、`SourceImageAsset`、`SequencePreset`、`GenerationJob`、`Frame`、`ExportJob` 的领域定义。
+- **数据所有权**：`Project`、`SourceImageAsset`、`SequencePreset`、`GenerationJob`、`Frame`、`FrameWorkspace`、`FrameWorkspaceSnapshot`、`ExportJob` 的领域定义。
 - **输入/输出**：输入领域命令和网关结果；输出合法状态、领域事件和用例结果。
 - **依赖边界**：不得依赖 `APP`、功能模块或基础设施实现。
 - **核心不变量**：领域规则可脱离浏览器测试，外部差异通过契约隔离。
 - **主要失败模式**：非法状态转换、基础设施字段泄漏、领域对象职责重叠。
-- **测试入口**：[`src/core/promptTemplates.test.ts`](src/core/promptTemplates.test.ts)、[`src/core/sequenceGeneration.test.ts`](src/core/sequenceGeneration.test.ts)、[`server/providers/imageParsing.test.ts`](server/providers/imageParsing.test.ts)。
+- **测试入口**：[`src/core/promptTemplates.test.ts`](src/core/promptTemplates.test.ts)、[`src/core/sequenceGeneration.test.ts`](src/core/sequenceGeneration.test.ts)、[`src/core/frameWorkspace.test.ts`](src/core/frameWorkspace.test.ts)、[`server/providers/imageParsing.test.ts`](server/providers/imageParsing.test.ts)。
 - **长期文档**：[`系统架构`](docs/ARCHITECTURE.md)。
-- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md)。
+- **有效设计**：已批准 [`MOD-20260710-002`](AIwork/2026-07-10/MOD-20260710-002-source-image-sequence-flow.md) 和 [`MOD-20260711-002`](AIwork/2026-07-11/MOD-20260711-002-source-image-ui-api.md)；已关闭 [`MOD-20260711-004`](AIwork/2026-07-11/MOD-20260711-004-sequence-generation-mvp-plan.md) 和 [`MOD-20260712-001`](AIwork/2026-07-12/MOD-20260712-001-frame-workspace-mvp-plan.md)。
 
 ### SHARED — 共享基础
 

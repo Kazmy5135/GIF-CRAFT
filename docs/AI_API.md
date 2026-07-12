@@ -64,6 +64,9 @@ H5 只调用同源代理：
 - `FFMPEG_PATH` 与 `FFPROBE_PATH` 可覆盖命令路径；未配置时使用运行环境 `PATH`。
 - 客户端只在完整帧数量、稳定索引、任务归属、相同尺寸、允许 MIME 和 Blob 可读性全部通过后将任务标记为 `completed`。
 - 真实验收已覆盖一个 8 帧角色任务、一个 12 帧场景任务、代理重启后的未知状态，以及非整秒视频精确抽帧。
+- 序列能力通过 `frameRetryMode` 声明指定帧重试模式。当前 Gorilla Seedance 声明 `full_sequence_fallback`：重新生成完整序列，只把目标原始 `sequenceIndex` 的帧作为候选，不自动覆盖工作区当前帧。
+- 工作区重试使用独立且已持久化的 `draftId`、`clientRequestId` 和尝试 ID。父任务业务参数保持冻结，但新的子任务使用当前能力快照的 `proxyInstanceId`；提交回执和子任务 ID 必须在首次查询前持久化。
+- 运行中或未知的重试刷新后只按已持久化子任务 ID 查询，不重新 POST；没有可查询 ID 时允许用户显式放弃本地跟踪，并明确远端任务仍可能运行。
 
 MCP SDK 的远程客户端使用和工具发现依据官方 [TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)；该服务使用旧式 HTTP+SSE，因此采用 v1 SDK 的 `SSEClientTransport` 兼容路径。
 
