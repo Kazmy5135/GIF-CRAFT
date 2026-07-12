@@ -1,10 +1,13 @@
 export const GIF_CRAFT_DATABASE_NAME = "gif-craft";
-export const GIF_CRAFT_DATABASE_VERSION = 2;
+export const GIF_CRAFT_DATABASE_VERSION = 4;
 
 export const STORAGE_STORES = {
   sourceImages: "source-images",
   generationJobs: "generation-jobs",
   frameResources: "frame-resources",
+  frameWorkspaces: "frame-workspaces",
+  workspaceFrameResources: "workspace-frame-resources",
+  frameWorkspaceSnapshots: "frame-workspace-snapshots",
   storageMeta: "storage-meta",
 } as const;
 
@@ -46,6 +49,39 @@ function createStores(database: IDBDatabase): void {
       unique: true,
     });
     frames.createIndex("createdAt", "createdAt");
+  }
+
+  if (!database.objectStoreNames.contains(STORAGE_STORES.frameWorkspaces)) {
+    const workspaces = database.createObjectStore(STORAGE_STORES.frameWorkspaces, {
+      keyPath: "workspaceId",
+    });
+    workspaces.createIndex("sourceJobId", "sourceJobId", { unique: true });
+    workspaces.createIndex("createdAt", "createdAt");
+    workspaces.createIndex("updatedAt", "updatedAt");
+  }
+
+  if (!database.objectStoreNames.contains(STORAGE_STORES.workspaceFrameResources)) {
+    const resources = database.createObjectStore(
+      STORAGE_STORES.workspaceFrameResources,
+      { keyPath: "id" },
+    );
+    resources.createIndex("workspaceId", "workspaceId");
+    resources.createIndex("workspaceAndSlot", ["workspaceId", "slotId"]);
+    resources.createIndex("attemptId", "attemptId");
+    resources.createIndex("childJobId", "childJobId");
+    resources.createIndex("createdAt", "createdAt");
+  }
+
+  if (!database.objectStoreNames.contains(STORAGE_STORES.frameWorkspaceSnapshots)) {
+    const snapshots = database.createObjectStore(
+      STORAGE_STORES.frameWorkspaceSnapshots,
+      { keyPath: "snapshotId" },
+    );
+    snapshots.createIndex("workspaceId", "workspaceId");
+    snapshots.createIndex("workspaceAndRevision", ["workspaceId", "revision"], {
+      unique: true,
+    });
+    snapshots.createIndex("createdAt", "createdAt");
   }
 
   if (!database.objectStoreNames.contains(STORAGE_STORES.storageMeta)) {

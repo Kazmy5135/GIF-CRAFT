@@ -1,7 +1,7 @@
 import { Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { FrameWorkspaceRoute } from "../features/frame-workspace";
 import { ImagePage } from "../features/source-image/ImagePage";
 import { SettingsPage } from "../features/settings/SettingsPage";
-import { PlaceholderPage } from "../features/placeholders/PlaceholderPage";
 import { SequencePage } from "../features/sequence/SequencePage";
 import { ErrorBoundary } from "./ErrorBoundary";
 
@@ -37,15 +37,7 @@ export function App() {
           <Routes>
             <Route path="/image" element={<ImagePage />} />
             <Route path="/sequence" element={<SequencePage />} />
-            <Route
-              path="/frames"
-              element={
-                <PlaceholderPage
-                  title="序列帧工作区"
-                  description="已接收完成任务的稳定帧集合；帧编辑和导出将在后续模块实现。"
-                />
-              }
-            />
+            <Route path="/frames" element={<FrameWorkspaceRoute />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/" element={<Navigate to="/image" replace />} />
             <Route path="*" element={<Navigate to="/image" replace />} />

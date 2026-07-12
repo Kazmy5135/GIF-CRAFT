@@ -493,6 +493,48 @@ async function deleteOldOrphanFrameKeys(
   return 0;
 }
 
+function readWorkspaceProtectedJobIds(workspaceStore: IDBObjectStore): Promise<Set<string>> {
+  return new Promise((resolve, reject) => {
+    const protectedIds = new Set<string>();
+    const request = workspaceStore.openCursor();
+    request.onerror = () =>
+      reject(request.error ?? new Error("无法遍历工作区资源保护关系。"));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(protectedIds);
+        return;
+      }
+      const workspace = cursor.value as {
+        sourceJobId?: string;
+        activeRetryJobIds?: readonly string[];
+      };
+      if (workspace.sourceJobId) protectedIds.add(workspace.sourceJobId);
+      workspace.activeRetryJobIds?.forEach((jobId) => protectedIds.add(jobId));
+      cursor.continue();
+    };
+  });
+}
+
+function readSnapshotProtectedJobIds(snapshotStore: IDBObjectStore): Promise<Set<string>> {
+  return new Promise((resolve, reject) => {
+    const protectedIds = new Set<string>();
+    const request = snapshotStore.openCursor();
+    request.onerror = () =>
+      reject(request.error ?? new Error("无法遍历工作区快照资源保护关系。"));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(protectedIds);
+        return;
+      }
+      const snapshot = cursor.value as { sourceJobId?: string };
+      if (snapshot.sourceJobId) protectedIds.add(snapshot.sourceJobId);
+      cursor.continue();
+    };
+  });
+}
+
 export async function cleanupSequenceStorage(
   options: CleanupSequenceStorageOptions = {},
 ): Promise<CleanupSequenceStorageResult> {
@@ -515,6 +557,8 @@ export async function cleanupSequenceStorage(
     [
       STORAGE_STORES.generationJobs,
       STORAGE_STORES.frameResources,
+      STORAGE_STORES.frameWorkspaces,
+      STORAGE_STORES.frameWorkspaceSnapshots,
       STORAGE_STORES.storageMeta,
     ],
     "readwrite",
@@ -522,8 +566,12 @@ export async function cleanupSequenceStorage(
   const committed = transactionCommitted(transaction);
   const jobStore = transaction.objectStore(STORAGE_STORES.generationJobs);
   const frameStore = transaction.objectStore(STORAGE_STORES.frameResources);
+  const workspaceStore = transaction.objectStore(STORAGE_STORES.frameWorkspaces);
+  const snapshotStore = transaction.objectStore(STORAGE_STORES.frameWorkspaceSnapshots);
   const metaStore = transaction.objectStore(STORAGE_STORES.storageMeta);
   const jobsRequest = jobStore.getAll();
+  const workspaceProtectedJobIds = readWorkspaceProtectedJobIds(workspaceStore);
+  const snapshotProtectedJobIds = readSnapshotProtectedJobIds(snapshotStore);
   const metaRequest = metaStore.get(FRAME_BYTES_META_KEY);
   const result: CleanupSequenceStorageResult = {
     deletedJobIds: [],
@@ -532,10 +580,14 @@ export async function cleanupSequenceStorage(
     bytesBefore: 0,
     bytesAfter: 0,
   };
-  const [jobs, meta] = await Promise.all([
+  const [jobs, workspaceProtection, snapshotProtection, meta] = await Promise.all([
     requestResult<StoredGenerationJob[]>(jobsRequest),
+    workspaceProtectedJobIds,
+    snapshotProtectedJobIds,
     requestResult<StorageMetaRecord | undefined>(metaRequest),
   ]);
+  workspaceProtection.forEach((jobId) => protectedJobIds.add(jobId));
+  snapshotProtection.forEach((jobId) => protectedJobIds.add(jobId));
   const jobById = new Map(jobs.map((job) => [job.id, job]));
   const trackedBytes = jobs.reduce((sum, job) => sum + (job.resultBytes ?? 0), 0);
   result.bytesBefore = Math.max(0, meta?.value ?? 0, trackedBytes);

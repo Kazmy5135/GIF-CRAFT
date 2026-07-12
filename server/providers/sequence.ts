@@ -46,6 +46,7 @@ export function getSequenceProviderCapabilities(
     proxyInstanceId: PROXY_INSTANCE_ID,
     ...(unavailabilityReason ? { unavailabilityReason } : {}),
     supportsImageToSequence: true,
+    frameRetryMode: "full_sequence_fallback",
     // Gorilla exposes one synchronous tool call, not the provider operation ID.
     supportsAsyncQuery: false,
     supportsLocalJobQuery: true,

@@ -143,6 +143,7 @@ function dependencyFixture(overrides: Partial<SequenceDependencies> = {}) {
       supportsCancellation: false,
       supportsRandomSeed: false,
       supportsRealProgress: false,
+      frameRetryMode: "full_sequence_fallback",
       inputMimeTypes: ["image/png"], frameCounts: [8, 12], frameRates: [8, 12],
       aspectRatios: ["1:1"], providerDurationSeconds: [4], providerResolutions: ["480p"],
       outputMimeTypes: ["video/mp4"], outputShape: "video", canNormalizeLosslessly: false,

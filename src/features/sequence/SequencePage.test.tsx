@@ -59,6 +59,7 @@ const sequenceProvider: SequenceProviderCapabilitySummary = {
   supportsCancellation: false,
   supportsRandomSeed: false,
   supportsRealProgress: false,
+  frameRetryMode: "full_sequence_fallback",
   inputMimeTypes: ["image/png"],
   frameCounts: [8, 12],
   frameRates: [8, 12],

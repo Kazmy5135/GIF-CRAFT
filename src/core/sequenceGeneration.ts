@@ -753,6 +753,8 @@ export function createFrameWorkspaceHandoff(
 export interface SequenceProviderCapabilities {
   readonly provider: string;
   readonly supportsImageToSequence: boolean;
+  /** How FRAME_WORKSPACE can obtain a replacement candidate for one slot. */
+  readonly frameRetryMode: "native_single_frame" | "full_sequence_fallback" | "unsupported";
   readonly supportsAsyncQuery: boolean;
   readonly supportsCancellation: boolean;
   readonly supportsRandomSeed: boolean;
