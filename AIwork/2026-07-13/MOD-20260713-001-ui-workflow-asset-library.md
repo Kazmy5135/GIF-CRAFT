@@ -2,7 +2,7 @@
 id: MOD-20260713-001
 title: UI 层级与资产工作流重构
 type: major
-status: Verified
+status: Closed
 created: 2026-07-13
 updated: 2026-07-13
 timezone: Asia/Hong_Kong
@@ -22,6 +22,7 @@ approval:
 related_commits:
   - 82c9585
   - e55c597
+  - 8bf1121
 supersedes: []
 ---
 
@@ -366,8 +367,8 @@ None。用户已批准启动实施；未单独指定的 P0 项按上述保守决
 |---|---|---|
 | 设计 | `82c9585` | Approved |
 | 实施 | `e55c597` | Implemented |
-| 验证 | Pending | Verified，待提交 |
-| 关闭 | Pending | 未开始 |
+| 验证 | `8bf1121` | Verified |
+| 关闭 | 当前提交 | Closed |
 
 ## 勘误
 
