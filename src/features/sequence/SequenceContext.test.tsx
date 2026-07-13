@@ -199,6 +199,7 @@ function Harness() {
       <span data-testid="storage-status">{context.resultStorageStatus ?? "none"}</span>
       <span role="alert">{context.error}</span>
       <button type="button" onClick={() => { void context.submit(generationRequest(), source.dataUrl).catch(() => undefined); void context.submit(generationRequest(), source.dataUrl).catch(() => undefined); }}>submit twice</button>
+      <button type="button" onClick={() => void context.submit(generationRequest(), source.dataUrl, { redoOfJobId: "job-original" }).catch(() => undefined)}>submit redo</button>
       <button type="button" onClick={() => void context.reconcile()}>reconcile</button>
       <button type="button" onClick={() => { void context.reconcile(); void context.reconcile(); }}>reconcile twice</button>
       <button type="button" onClick={() => void context.retryFailed()}>retry</button>
@@ -212,6 +213,16 @@ function renderContext(dependencies: SequenceDependencies) {
 }
 
 describe("SequenceContext reliability", () => {
+  it("persists full-sequence redo lineage on the new job", async () => {
+    const { dependencies, saved } = dependencyFixture();
+    renderContext(dependencies);
+    await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("none"));
+    fireEvent.click(screen.getByRole("button", { name: "submit redo" }));
+    await waitFor(() => expect(saved.length).toBeGreaterThan(0));
+    expect(saved[0].redoOfJobId).toBe("job-original");
+    expect(saved[0].id).not.toBe("job-original");
+  });
+
   it("persists submitting input before POST and suppresses an active double submit", async () => {
     let resolveReceipt!: (value: unknown) => void;
     const receipt = new Promise((resolve) => { resolveReceipt = resolve; });

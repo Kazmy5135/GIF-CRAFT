@@ -66,7 +66,7 @@ export function FrameWorkspacePage() {
   const activeIds = model.activeFrames.map((frame) => frame.id);
   const playback = usePreviewPlayback({
     frameIds: activeIds,
-    frameRate: model.workspace?.frameRate ?? 8,
+    frameRate: model.workspace?.playbackFrameRate ?? model.workspace?.frameRate ?? 8,
     loopMode: model.workspace?.loopMode ?? "loop",
     selectedId: model.selectedId,
     onSelect: model.selectFrame,
@@ -118,8 +118,11 @@ export function FrameWorkspacePage() {
   return (
     <main className="page-content frame-workspace-page">
       <header className="page-header frame-workspace-header">
-        <div><h1>序列帧工作区</h1><p>{workspace.presetName} · 任务 {workspace.jobId}</p></div>
-        <span className={`save-indicator ${model.saveState}`} role="status">{saveLabels[model.saveState]} · r{workspace.revision}</span>
+        <div><h1>序列帧调整工作区</h1><p>{workspace.presetName} · 序列帧 ID {workspace.sourceJobId}</p></div>
+        <div className="button-row frame-header-actions">
+          <Link className="button" to={`/create?sourceId=${encodeURIComponent(workspace.sourceImageId)}&redoOf=${encodeURIComponent(workspace.sourceJobId)}`}>重做此序列</Link>
+          <span className={`save-indicator ${model.saveState}`} role="status">{saveLabels[model.saveState]} · r{workspace.revision}</span>
+        </div>
       </header>
 
       {model.saveState === "conflict" && <div className="alert warning frame-alert"><strong>检测到多标签页冲突</strong><p>{model.saveError}</p><button className="button" type="button" onClick={() => void model.reloadLatest()}>放弃本页未保存动作并加载最新版本</button></div>}
@@ -128,15 +131,32 @@ export function FrameWorkspacePage() {
       <section className="panel frame-workspace-summary" aria-label="工作区摘要">
         <dl className="parameter-summary">
           <div><dt>纳入帧</dt><dd>{model.activeFrames.length} / {workspace.frames.length}</dd></div>
-          <div><dt>播放</dt><dd>{workspace.frameRate} FPS · {workspace.loopMode === "loop" ? "循环" : "单次"}</dd></div>
+          <div><dt>播放</dt><dd>{workspace.playbackFrameRate} FPS · {workspace.loopMode === "loop" ? "循环" : "单次"}</dd></div>
+          <div><dt>生成 FPS</dt><dd>{workspace.sourceFrameRate}</dd></div>
           <div><dt>画布</dt><dd>{workspace.canvas.width} × {workspace.canvas.height}</dd></div>
           <div><dt>审核</dt><dd>{counts.kept} 保留 · {counts.pending} 待审核 · {counts.removed} 移除</dd></div>
         </dl>
+        <label className="frame-rate-control">
+          <span>修改预览/导出帧率</span>
+          <input
+            aria-label="播放帧率"
+            type="number"
+            min={1}
+            max={60}
+            step={1}
+            value={workspace.playbackFrameRate}
+            onChange={(event) => {
+              const next = event.currentTarget.valueAsNumber;
+              if (Number.isInteger(next) && next > 0 && next <= 60 && next !== workspace.playbackFrameRate) model.setFrameRate(next);
+            }}
+          />
+          <small>只修改当前工作区及之后的新快照；原始生成任务保持 {workspace.sourceFrameRate} FPS。</small>
+        </label>
       </section>
 
       <div className="frame-editor-grid">
         <section className="panel frame-preview-panel" aria-label="连续预览">
-          <div className="section-heading"><div><h2>连续预览</h2><p>只播放当前纳入的帧，排序和移除会立即同步。</p></div>{selectedActiveIndex >= 0 && <span className="badge">{selectedActiveIndex + 1} / {model.activeFrames.length}</span>}</div>
+          <div className="section-heading"><div><h2>序列帧预览</h2><p>按当前工作区 FPS 播放纳入帧；排序、抽帧和候选替换会立即同步。</p></div>{selectedActiveIndex >= 0 && <span className="badge">{selectedActiveIndex + 1} / {model.activeFrames.length}</span>}</div>
           <div className="frame-main-preview" style={{ aspectRatio: `${workspace.canvas.width} / ${workspace.canvas.height}` }}>
             {selectedFrame && selectedUrl && !brokenImages.has(selectedFrame.id) ? <img src={selectedUrl} alt={`当前帧，原始索引 ${selectedFrame.originalIndex}`} onError={() => markImageBroken(selectedFrame.id)} /> : <div className="frame-broken-state">{selectedFrame ? "当前帧资源损坏或无法解码" : "没有可预览的帧"}</div>}
           </div>
@@ -198,7 +218,7 @@ export function FrameWorkspacePage() {
       </div>
 
       <section className="panel frame-strip-panel">
-        <div className="section-heading"><div><h2>帧带</h2><p>拖拽、按钮或 Alt + 左右方向键均可排序。</p></div><label className="frame-filter">筛选<select value={model.filter} onChange={(event) => model.setFilter(event.target.value as typeof model.filter)}><option value="all">全部（{workspace.frames.length}）</option><option value="pending">待审核（{counts.pending}）</option><option value="kept">已保留（{counts.kept}）</option><option value="removed">已移除（{counts.removed}）</option></select></label></div>
+        <div className="section-heading"><div><h2>抽帧与帧序</h2><p>通过非破坏性移除筛选输出帧；拖拽、按钮或 Alt + 左右方向键均可排序。</p></div><label className="frame-filter">筛选<select value={model.filter} onChange={(event) => model.setFilter(event.target.value as typeof model.filter)}><option value="all">全部（{workspace.frames.length}）</option><option value="pending">待审核（{counts.pending}）</option><option value="kept">已保留（{counts.kept}）</option><option value="removed">已移除（{counts.removed}）</option></select></label></div>
         {model.visibleFrames.length === 0 ? <div className="empty-state frame-filter-empty">当前筛选没有帧。</div> : <div className="frame-strip" role="listbox" aria-label="工作区帧顺序">{model.visibleFrames.map((frame) => {
           const index = workspace.frames.findIndex((item) => item.id === frame.id);
           return <button key={frame.id} className={`frame-thumbnail ${model.selectedId === frame.id ? "selected" : ""} ${frame.decision}`} type="button" role="option" aria-selected={model.selectedId === frame.id} draggable onDragStart={() => setDraggedId(frame.id)} onDragEnd={() => setDraggedId(null)} onDragOver={(event) => event.preventDefault()} onDrop={() => onDrop(frame.id)} onClick={() => model.selectFrame(frame.id)} onKeyDown={(event) => onFrameKeyDown(event, frame)}>
@@ -209,8 +229,8 @@ export function FrameWorkspacePage() {
       </section>
 
       <section className="panel frame-readiness-panel">
-        <div><h2>交接就绪检查</h2>{model.readiness?.ready ? <p className="status-ok">所有纳入帧均已保留且资源可读，可以生成不可变快照。</p> : <ul>{model.readiness?.issues.map((issue, index) => <li key={`${index}:${issue}`}>{issue}</li>)}</ul>}</div>
-        <div><button className="button primary" type="button" disabled={!model.readiness?.ready || model.saveState !== "saved"} onClick={() => void model.createSnapshot()}>生成工作区快照</button>{model.snapshot && <p className="status-ok" role="status">快照 {model.snapshot.id} 已生成，共 {model.snapshot.frameCount} 帧。</p>}</div>
+        <div><h2>导出就绪检查</h2>{model.readiness?.ready ? <p className="status-ok">所有纳入帧均已保留且资源可读，可以生成不可变快照并导出。</p> : <ul>{model.readiness?.issues.map((issue, index) => <li key={`${index}:${issue}`}>{issue}</li>)}</ul>}</div>
+        <div className="frame-export-actions"><button className="button primary" type="button" disabled={!model.readiness?.ready || model.saveState !== "saved"} onClick={() => void model.createSnapshot()}>生成工作区快照</button>{model.snapshot && <><p className="status-ok" role="status">快照 {model.snapshot.id} 已生成，共 {model.snapshot.frameCount} 帧。</p><Link className="button primary" to={`/export/${encodeURIComponent(model.snapshot.id)}`}>导出 PNG ZIP</Link></>}</div>
       </section>
     </main>
   );

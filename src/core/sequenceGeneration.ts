@@ -534,6 +534,8 @@ export interface GenerationJob {
   readonly id: string;
   readonly clientRequestId: string;
   readonly provider: string;
+  /** A deliberate full-sequence redo creates a new job without overwriting its source job. */
+  readonly redoOfJobId?: string;
   readonly externalJobRef?: string;
   readonly request: SequenceGenerationRequest;
   readonly status: GenerationJobStatus;
@@ -619,6 +621,7 @@ export function createRetryChildJob(input: {
     id: input.id,
     clientRequestId: input.clientRequestId,
     provider: input.parent.provider,
+    redoOfJobId: input.parent.redoOfJobId,
     request,
     status: "retrying",
     progress: null,

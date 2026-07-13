@@ -1,6 +1,7 @@
 import {
   freezeFrameWorkspaceSnapshot,
   markFrameWorkspacePersisted,
+  restoreFrameWorkspaceDefaults,
   type FrameRevision,
   type FrameWorkspace,
   type FrameWorkspaceSnapshot,
@@ -142,7 +143,8 @@ export class FrameWorkspaceSnapshotAlreadyExistsError extends Error {
 export function frameWorkspaceStorageRecord(
   workspace: FrameWorkspace,
 ): StoredFrameWorkspace<FrameWorkspace> {
-  const persistedWorkspace = markFrameWorkspacePersisted(workspace, workspace.revision);
+  const restoredWorkspace = restoreFrameWorkspaceDefaults(workspace);
+  const persistedWorkspace = markFrameWorkspacePersisted(restoredWorkspace, restoredWorkspace.revision);
   const retryAttempts = Object.values(persistedWorkspace.retryAttempts);
   const activeStatuses = new Set([
     "submitting",
@@ -250,6 +252,25 @@ function assertWorkspaceRecord<TWorkspace>(record: StoredFrameWorkspace<TWorkspa
       "工作区元数据不能包含 Blob、data URL、临时对象 URL 或完整签名 URL。",
     );
   }
+}
+
+function restoreWorkspaceRecordDefaults<TWorkspace>(
+  record: StoredFrameWorkspace<TWorkspace> | undefined,
+): StoredFrameWorkspace<TWorkspace> | undefined {
+  if (!record || !record.workspace || typeof record.workspace !== "object") return record;
+  const workspace = record.workspace as Partial<FrameWorkspace>;
+  if (
+    typeof workspace.workspaceId !== "string" ||
+    typeof workspace.sourceJobId !== "string" ||
+    !workspace.source ||
+    !Array.isArray(workspace.orderedSlotIds)
+  ) {
+    return record;
+  }
+  const restored = restoreFrameWorkspaceDefaults(record.workspace as unknown as FrameWorkspace);
+  return (restored as unknown) === record.workspace
+    ? record
+    : { ...record, workspace: restored as unknown as TWorkspace };
 }
 
 function assertCandidateResource<TRevision>(
@@ -403,10 +424,11 @@ export async function getFrameWorkspace<TWorkspace = FrameWorkspace>(
 ): Promise<StoredFrameWorkspace<TWorkspace> | undefined> {
   const database = await openGifCraftDatabase();
   const transaction = database.transaction(STORAGE_STORES.frameWorkspaces, "readonly");
-  return committedRequestResult<StoredFrameWorkspace<TWorkspace> | undefined>(
+  const record = await committedRequestResult<StoredFrameWorkspace<TWorkspace> | undefined>(
     transaction.objectStore(STORAGE_STORES.frameWorkspaces).get(workspaceId),
     transaction,
   );
+  return restoreWorkspaceRecordDefaults(record);
 }
 
 export async function getFrameWorkspaceByJobId<TWorkspace = FrameWorkspace>(
@@ -414,10 +436,11 @@ export async function getFrameWorkspaceByJobId<TWorkspace = FrameWorkspace>(
 ): Promise<StoredFrameWorkspace<TWorkspace> | undefined> {
   const database = await openGifCraftDatabase();
   const transaction = database.transaction(STORAGE_STORES.frameWorkspaces, "readonly");
-  return committedRequestResult<StoredFrameWorkspace<TWorkspace> | undefined>(
+  const record = await committedRequestResult<StoredFrameWorkspace<TWorkspace> | undefined>(
     transaction.objectStore(STORAGE_STORES.frameWorkspaces).index("sourceJobId").get(jobId),
     transaction,
   );
+  return restoreWorkspaceRecordDefaults(record);
 }
 
 export async function listFrameWorkspaces<TWorkspace = FrameWorkspace>(): Promise<
@@ -429,7 +452,9 @@ export async function listFrameWorkspaces<TWorkspace = FrameWorkspace>(): Promis
     transaction.objectStore(STORAGE_STORES.frameWorkspaces).getAll(),
     transaction,
   );
-  return workspaces.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return workspaces
+    .map((record) => restoreWorkspaceRecordDefaults(record)!)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 async function assertExpectedRevision<TWorkspace>(

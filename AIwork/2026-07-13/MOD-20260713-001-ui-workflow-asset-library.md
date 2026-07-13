@@ -2,7 +2,7 @@
 id: MOD-20260713-001
 title: UI 层级与资产工作流重构
 type: major
-status: Approved
+status: Implemented
 created: 2026-07-13
 updated: 2026-07-13
 timezone: Asia/Hong_Kong
@@ -19,7 +19,8 @@ approval:
   state: approved
   approved_by: user
   approved_at: 2026-07-13
-related_commits: []
+related_commits:
+  - 82c9585
 supersedes: []
 ---
 
@@ -332,7 +333,7 @@ APP
 
 ## 验证结果
 
-尚未验证。本轮仅完成现状核对、目标流程差异分析和 Draft 开发清单；未编写实现代码。
+实现已完成，验证结论将在独立验证阶段记录。当前实现包含新生成/库存层级、图库与序列帧库、整序列重做 lineage、非破坏性播放 FPS、工作区预览/抽帧编排，以及基于不可变快照的 PNG ZIP 导出。
 
 ## 决策记录
 
@@ -348,6 +349,7 @@ APP
 | 2026-07-13 | “抽帧”首期按现有帧集合的筛选、移除和排序实现，不新增原视频重采样 | 采用不扩大服务端媒体保存和安全边界的保守解释 |
 | 2026-07-13 | 序列帧预览继续作为工作区功能区 | 现有播放内核已验证，不新增无必要的独立持久化页面 |
 | 2026-07-13 | 首期导出实现 PNG ZIP，并在清单中保存 FPS、循环、画布和来源快照信息 | 先闭合可靠图片资产交付；GIF/WebP/MP4 保持后续独立扩展 |
+| 2026-07-13 | 设计基线提交 `82c9585` 后进入 `In Progress` | 用户批准已记录，设计提交与后续实现保持独立 |
 
 ## 待确认项
 
@@ -357,8 +359,8 @@ None。用户已批准启动实施；未单独指定的 P0 项按上述保守决
 
 | 阶段 | Commit | 状态 |
 |---|---|---|
-| 设计 | Pending | Approved，等待独立提交 |
-| 实施 | Pending | 未开始 |
+| 设计 | `82c9585` | Approved |
+| 实施 | Pending | Implemented，待提交 |
 | 关闭 | Pending | 未开始 |
 
 ## 勘误

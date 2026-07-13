@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFrameWorkspace,
+  setFrameWorkspaceFrameRate,
   setFrameDecision,
   type FrameRetryAttempt,
   registerFrameRetryAttempt,
@@ -140,6 +141,46 @@ beforeEach(() => {
 });
 
 describe("default frame workspace retry adapter", () => {
+  it("暴露重做来源上下文，并通过统一命令非破坏性修改和保存播放 FPS", async () => {
+    const adapter = createDefaultWorkspaceAdapter();
+    const loaded = await adapter.loadOrCreate("job-1");
+
+    expect(loaded).toMatchObject({
+      jobId: "job-1",
+      sourceJobId: "job-1",
+      sourceImageId: "source-1",
+      sourceFrameRate: 8,
+      playbackFrameRate: 8,
+      frameRate: 8,
+    });
+
+    const edited = adapter.apply(loaded, { type: "set_frame_rate", frameRate: 12 });
+    expect(edited).toMatchObject({ playbackFrameRate: 12, frameRate: 12, sourceFrameRate: 8, revision: 1 });
+    const saved = await adapter.save(edited, loaded.persistedRevision);
+    expect(saved.persistedRevision).toBe(1);
+    expect(mocks.saveWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({
+        revision: 1,
+        workspace: expect.objectContaining({ playbackFrameRate: 12, source: expect.objectContaining({ frameRate: 8 }) }),
+      }),
+      0,
+    );
+  });
+
+  it("旧 v4 工作区缺少覆盖字段时默认使用来源 FPS", async () => {
+    const domain = initialDomain();
+    const { playbackFrameRate: _legacyMissingField, ...legacyDomain } = domain;
+    mocks.getWorkspace.mockResolvedValue({
+      ...frameWorkspaceStorageRecord(domain),
+      workspace: legacyDomain,
+    });
+
+    const loaded = await createDefaultWorkspaceAdapter().loadOrCreate("job-1");
+
+    expect(loaded).toMatchObject({ sourceFrameRate: 8, playbackFrameRate: 8, frameRate: 8 });
+    expect((loaded.opaque as { domain: FrameWorkspace }).domain).toMatchObject({ playbackFrameRate: 8, revision: 0 });
+  });
+
   it("注册并持久化重试，安全落盘候选后支持接受与恢复原版", async () => {
     const adapter = createDefaultWorkspaceAdapter();
     const loaded = await adapter.loadOrCreate("job-1");
@@ -208,12 +249,15 @@ describe("default frame workspace retry adapter", () => {
     let domain = initialDomain();
     domain = setFrameDecision(domain, "slot:frame-0", "kept", { expectedRevision: 0, updatedAt: now });
     domain = setFrameDecision(domain, "slot:frame-1", "kept", { expectedRevision: 1, updatedAt: now });
+    domain = setFrameWorkspaceFrameRate(domain, 12, { expectedRevision: 2, updatedAt: now });
     configure(domain);
     const adapter = createDefaultWorkspaceAdapter();
     const loaded = await adapter.loadOrCreate("job-1");
     expect(adapter.checkReadiness(loaded).ready).toBe(true);
     const summary = await adapter.createSnapshot(loaded);
     expect(mocks.saveSnapshot).toHaveBeenCalledTimes(1);
+    expect(mocks.saveSnapshot).toHaveBeenCalledWith(expect.objectContaining({ frameRate: 12, revision: 3 }));
+    expect(domain.source.frameRate).toBe(8);
     expect(summary.frameCount).toBe(2);
 
     mocks.saveSnapshot.mockRejectedValueOnce(new Error("snapshot storage failed"));

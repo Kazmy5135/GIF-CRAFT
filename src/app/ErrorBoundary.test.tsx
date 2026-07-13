@@ -21,6 +21,6 @@ describe("ErrorBoundary", () => {
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent("页面出现错误");
-    expect(screen.getByRole("link", { name: "返回生图" })).toHaveAttribute("href", "/image");
+    expect(screen.getByRole("link", { name: "返回新生成" })).toHaveAttribute("href", "/create");
   });
 });

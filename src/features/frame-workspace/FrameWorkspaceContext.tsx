@@ -46,6 +46,7 @@ interface FrameWorkspaceContextValue {
   decide: (frameId: string, decision: FrameDecisionView) => void;
   restore: (frameId: string) => void;
   move: (frameId: string, targetIndex: number) => void;
+  setFrameRate: (frameRate: number) => void;
   reloadLatest: () => Promise<void>;
   retrySave: () => void;
   createSnapshot: () => Promise<void>;
@@ -304,6 +305,7 @@ export function FrameWorkspaceProvider({
     decide,
     restore: (frameId) => runCommand({ type: "restore", frameId }),
     move: (frameId, targetIndex) => runCommand({ type: "move", frameId, targetIndex }),
+    setFrameRate: (frameRate) => runCommand({ type: "set_frame_rate", frameRate }),
     reloadLatest,
     retrySave: () => {
       if (saveQueue.current.length > 0) setSaveState("dirty");

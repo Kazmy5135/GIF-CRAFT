@@ -110,11 +110,19 @@ export interface SequenceContextValue {
   reconciling: boolean;
   error: string;
   refreshProviders: () => Promise<void>;
-  submit: (request: SequenceGenerationRequest, sourceImageDataUrl: string) => Promise<void>;
+  submit: (
+    request: SequenceGenerationRequest,
+    sourceImageDataUrl: string,
+    options?: SequenceSubmitOptions,
+  ) => Promise<void>;
   retryFailed: () => Promise<void>;
   reconcile: () => Promise<void>;
   abandonTracking: () => Promise<void>;
   clearError: () => void;
+}
+
+export interface SequenceSubmitOptions {
+  redoOfJobId?: string;
 }
 
 export const SequenceContext = createContext<SequenceContextValue | null>(null);
@@ -122,11 +130,13 @@ export const SequenceContext = createContext<SequenceContextValue | null>(null);
 function submittingJob(
   request: SequenceGenerationRequest,
   createdAt: string,
+  options: SequenceSubmitOptions = {},
 ): GenerationJob {
   return {
     id: request.draftId,
     clientRequestId: request.clientRequestId,
     provider: request.provider,
+    ...(options.redoOfJobId ? { redoOfJobId: options.redoOfJobId } : {}),
     request,
     status: "submitting",
     progress: null,
@@ -565,7 +575,11 @@ export function SequenceProvider({
   }, [currentJob, deps.hiddenPollMultiplier, deps.pollIntervalMs, deps.random, pollTick, reconcile]);
 
   const submit = useCallback(
-    async (request: SequenceGenerationRequest, sourceImageDataUrl: string) => {
+    async (
+      request: SequenceGenerationRequest,
+      sourceImageDataUrl: string,
+      options: SequenceSubmitOptions = {},
+    ) => {
       const existing = currentJobRef.current;
       if (
         submittingRef.current ||
@@ -574,7 +588,7 @@ export function SequenceProvider({
       submittingRef.current = true;
       setSubmitting(true);
       setError("");
-      const localJob = submittingJob(request, deps.now());
+      const localJob = submittingJob(request, deps.now(), options);
       try {
         await persistJob(localJob);
         const receipt = await deps.submitJob(request, sourceImageDataUrl);

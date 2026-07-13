@@ -4,6 +4,7 @@ import {
   createFrameWorkspaceSnapshot as createDomainFrameWorkspaceSnapshot,
   createFrameWorkspace as createDomainFrameWorkspace,
   setFrameDecision,
+  setFrameWorkspaceFrameRate,
   type FrameWorkspace,
   type FrameWorkspaceSnapshot,
 } from "../../core/frameWorkspace";
@@ -284,6 +285,53 @@ describe("frame workspace repository", () => {
     await expect(getFrameWorkspace("workspace-1")).resolves.toMatchObject({
       revision: 2,
       workspace: { revision: 2, lastPersistedRevision: 2 },
+    });
+  });
+
+  it("restores legacy IndexedDB v4 workspaces with source FPS and persists later overrides", async () => {
+    const initial = createDomainFrameWorkspace({
+      workspaceId: "workspace-legacy-v4",
+      handoff: handoff(),
+      createdAt: CREATED_AT,
+    });
+    const currentRecord = frameWorkspaceStorageRecord(initial);
+    const { playbackFrameRate: _legacyMissingField, ...legacyWorkspace } = currentRecord.workspace;
+    const database = await openGifCraftDatabase();
+    const transaction = database.transaction(STORAGE_STORES.frameWorkspaces, "readwrite");
+    const committed = new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+    transaction.objectStore(STORAGE_STORES.frameWorkspaces).put({
+      ...currentRecord,
+      workspaceId: initial.workspaceId,
+      workspace: legacyWorkspace,
+    });
+    await committed;
+
+    const loaded = await getFrameWorkspace<FrameWorkspace>(initial.workspaceId);
+    const loadedByJob = await getFrameWorkspaceByJobId<FrameWorkspace>(initial.sourceJobId);
+    const listed = await listFrameWorkspaces<FrameWorkspace>();
+
+    expect(loaded?.workspace).toMatchObject({ playbackFrameRate: 8, revision: 0, lastPersistedRevision: 0 });
+    expect(loadedByJob?.workspace.playbackFrameRate).toBe(8);
+    expect(listed[0]?.workspace.playbackFrameRate).toBe(8);
+
+    const edited = setFrameWorkspaceFrameRate(loaded!.workspace, 12, {
+      expectedRevision: 0,
+      updatedAt: "2026-07-01T00:00:01.000Z",
+    });
+    await saveFrameWorkspace(frameWorkspaceStorageRecord(edited), 0);
+
+    await expect(getFrameWorkspace<FrameWorkspace>(initial.workspaceId)).resolves.toMatchObject({
+      revision: 1,
+      workspace: {
+        playbackFrameRate: 12,
+        source: { frameRate: 8 },
+        revision: 1,
+        lastPersistedRevision: 1,
+      },
     });
   });
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { compileSourceImagePrompt } from "../../core/promptTemplates";
 import {
   aspectRatios,
@@ -33,10 +33,15 @@ function fileExtension(mimeType: string) {
 }
 
 export function ImagePage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedSourceId = searchParams.get("sourceId")?.trim() || null;
+  const redoOfJobId = searchParams.get("redoOf")?.trim() || null;
   const {
     providers,
     providersLoading,
     history,
+    historyLoading,
     currentSourceId,
     taskStatus,
     taskError,
@@ -128,12 +133,32 @@ export function ImagePage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  async function confirmAndContinue(asset: SourceImageAsset) {
+    await confirmSource(asset.id);
+    const next = new URLSearchParams();
+    if (redoOfJobId) next.set("redoOf", redoOfJobId);
+    const query = next.toString();
+    navigate(`/create/sequence${query ? `?${query}` : ""}`);
+  }
+
   return (
     <main className="page-content">
       <header className="page-header">
-        <h1>生图</h1>
-        <p>先生成或确认一张源图，再进入序列帧生成。</p>
+        <h1>新生成</h1>
+        <p>步骤 1/2：生成新图或从库存选择，并确认本次序列使用的静态图。</p>
       </header>
+
+      {redoOfJobId && (
+        <div className="alert info workflow-notice">
+          <strong>从序列 {redoOfJobId} 发起重做</strong>
+          <p>请重新确认对应静态图；继续后会创建新的序列帧 ID，不覆盖原序列。</p>
+        </div>
+      )}
+      {requestedSourceId && !history.some((asset) => asset.id === requestedSourceId) && !historyLoading && (
+        <div className="alert error workflow-notice" role="alert">
+          对应静态图不存在或已被清理，请从图库选择其他静态图。
+        </div>
+      )}
 
       <div className="workspace-grid">
         <form className="panel controls-panel" onSubmit={(event) => void submit(event)}>
@@ -255,9 +280,9 @@ export function ImagePage() {
           <div className="section-heading">
             <div>
               <h2>结果与历史</h2>
-              <p>生成结果不会自动成为序列帧源图。</p>
+              <p>生成结果会自动进入图库；确认后才会成为本次序列的静态图。</p>
             </div>
-            <span className="badge">{history.length} 项</span>
+            <div className="button-row"><span className="badge">{history.length} 项</span><Link className="button" to="/library/images">打开图库</Link></div>
           </div>
 
           {history.length === 0 ? (
@@ -273,7 +298,7 @@ export function ImagePage() {
                   Boolean(asset.confirmedAt && asset.contentSnapshotId) &&
                   asset.availability === "available";
                 return (
-                  <article className={`result-card${confirmed ? " confirmed" : ""}`} key={asset.id}>
+                  <article className={`result-card${confirmed ? " confirmed" : ""}${requestedSourceId === asset.id ? " requested" : ""}`} key={asset.id}>
                     <a href={asset.dataUrl} target="_blank" rel="noreferrer" title="打开原图">
                       <img src={asset.dataUrl} alt={`由 ${asset.model} 创建的源图候选`} />
                     </a>
@@ -299,8 +324,8 @@ export function ImagePage() {
                       </details>
                     </div>
                     <div className="button-row card-actions">
-                      <button className="button primary" type="button" onClick={() => void confirmSource(asset.id).catch(() => undefined)} disabled={confirmed}>
-                        {confirmed ? "已确认" : "确认为源图"}
+                      <button className="button primary" type="button" onClick={() => void confirmAndContinue(asset).catch(() => undefined)}>
+                        {confirmed ? "使用此图继续" : requestedSourceId === asset.id ? "确认对应静态图并继续" : "确认并进入序列生成"}
                       </button>
                       <a
                         className="button"

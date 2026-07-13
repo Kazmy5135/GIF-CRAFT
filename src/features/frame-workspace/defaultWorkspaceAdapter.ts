@@ -4,12 +4,15 @@ import {
   createFrameWorkspace as createDomainWorkspace,
   createFrameWorkspaceSnapshot,
   discardRetryCandidate,
+  getFrameWorkspacePlaybackFrameRate,
   markFrameWorkspacePersisted,
   moveFrameSlotTo,
   registerFrameRetryAttempt,
   restoreFrame,
   restoreOriginalFrame,
+  restoreFrameWorkspaceDefaults,
   setFrameDecision,
+  setFrameWorkspaceFrameRate,
   transitionWorkspaceRetryAttempt,
   validateFrameWorkspaceSnapshot,
   type FrameRetryAttempt,
@@ -59,6 +62,7 @@ import type {
 
 interface OpaqueWorkspace {
   domain: FrameWorkspace;
+  sourceImageId: string;
   sourceResources: Map<string, StoredFrameResource<Frame>>;
   candidateResources: Map<string, StoredWorkspaceFrameResource<FrameRevision>>;
   retryMode?: SequenceProviderCapabilities["frameRetryMode"];
@@ -172,10 +176,14 @@ function toView(opaque: OpaqueWorkspace): WorkspaceView {
   return {
     id: domain.workspaceId,
     jobId: domain.sourceJobId,
+    sourceJobId: domain.sourceJobId,
+    sourceImageId: opaque.sourceImageId,
     revision: domain.revision,
     persistedRevision: domain.lastPersistedRevision,
     presetName: sequencePresets[domain.source.presetId]?.displayName ?? domain.source.presetId,
-    frameRate: domain.source.frameRate,
+    frameRate: getFrameWorkspacePlaybackFrameRate(domain),
+    sourceFrameRate: domain.source.frameRate,
+    playbackFrameRate: getFrameWorkspacePlaybackFrameRate(domain),
     loopMode: domain.source.loopMode,
     canvas: { width: domain.source.canvas.width, height: domain.source.canvas.height },
     frames,
@@ -192,6 +200,8 @@ function mutate(view: WorkspaceView, command: WorkspaceCommand): WorkspaceView {
     domain = setFrameDecision(opaque.domain, command.frameId, command.decision, options);
   } else if (command.type === "restore") {
     domain = restoreFrame(opaque.domain, command.frameId, options);
+  } else if (command.type === "set_frame_rate") {
+    domain = setFrameWorkspaceFrameRate(opaque.domain, command.frameRate, options);
   } else {
     const from = opaque.domain.orderedSlotIds.indexOf(command.frameId);
     const targetIndex = Math.max(0, Math.min(opaque.domain.orderedSlotIds.length - 1, command.targetIndex));
@@ -234,7 +244,7 @@ export function createDefaultWorkspaceAdapter(): FrameWorkspaceAdapter {
     const stored = await getFrameWorkspaceByJobId<FrameWorkspace>(jobId);
     if (stored) {
       if (!workspaceRecordRefsAreValid(stored.workspace, resources)) throw new Error("工作区引用的原始帧已丢失或损坏。");
-      return markFrameWorkspacePersisted(stored.workspace, stored.revision);
+      return markFrameWorkspacePersisted(restoreFrameWorkspaceDefaults(stored.workspace), stored.revision);
     }
     const created = createDomainWorkspace({ workspaceId: crypto.randomUUID(), handoff, createdAt: new Date().toISOString() });
     try {
@@ -244,7 +254,7 @@ export function createDefaultWorkspaceAdapter(): FrameWorkspaceAdapter {
       if (!(error instanceof FrameWorkspaceAlreadyExistsError)) throw error;
       const raced = await getFrameWorkspaceByJobId<FrameWorkspace>(jobId);
       if (!raced) throw error;
-      return markFrameWorkspacePersisted(raced.workspace, raced.revision);
+      return markFrameWorkspacePersisted(restoreFrameWorkspaceDefaults(raced.workspace), raced.revision);
     }
   }
 
@@ -277,6 +287,7 @@ export function createDefaultWorkspaceAdapter(): FrameWorkspaceAdapter {
         fetchSequenceProviders().catch(() => []),
       ]);
       const jobRecord = await getGenerationJob<GenerationJob>(jobId);
+      if (!jobRecord) throw new Error("生成任务不存在或本地结果已被清理。");
       const provider = providers.find((item) => item.provider === jobRecord?.provider);
       if (provider) {
         retryModeByJob.set(jobId, provider.frameRetryMode);
@@ -295,6 +306,7 @@ export function createDefaultWorkspaceAdapter(): FrameWorkspaceAdapter {
       }));
       return toView({
         domain,
+        sourceImageId: jobRecord.job.request.source.id,
         sourceResources: new Map(resources.map((resource) => [resource.id, resource])),
         candidateResources: new Map(candidates.map((resource) => [resource.id, resource])),
         retryMode: currentRetryMode,

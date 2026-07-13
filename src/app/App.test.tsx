@@ -14,7 +14,7 @@ afterEach(async () => {
 });
 
 describe("App shell", () => {
-  it("renders the four navigation tabs and the sequence page", async () => {
+  it("renders task-oriented navigation and the sequence page", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -24,7 +24,7 @@ describe("App shell", () => {
     );
 
     render(
-      <MemoryRouter initialEntries={["/sequence"]}>
+      <MemoryRouter initialEntries={["/create/sequence"]}>
         <SourceImageProvider>
           <SequenceProvider>
             <App />
@@ -33,10 +33,10 @@ describe("App shell", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("link", { name: "生图" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "生成序列帧" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "序列帧工作区" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "新生成" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "库存" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "设置" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "2 序列生成" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "生成序列帧" })).toBeInTheDocument();
   });
 

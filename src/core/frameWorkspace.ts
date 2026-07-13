@@ -92,6 +92,8 @@ export interface FrameWorkspace {
   readonly schemaVersion: typeof FRAME_WORKSPACE_SCHEMA_VERSION;
   readonly sourceJobId: string;
   readonly source: FrameWorkspaceSourceSnapshot;
+  /** Non-destructive playback override. The immutable source FPS stays in source.frameRate. */
+  readonly playbackFrameRate: number;
   readonly orderedSlotIds: readonly string[];
   readonly slots: Readonly<Record<string, FrameWorkspaceSlot>>;
   readonly revisions: Readonly<Record<string, FrameRevision>>;
@@ -256,6 +258,7 @@ export function createFrameWorkspace(input: CreateFrameWorkspaceInput): FrameWor
       canvas: { ...handoff.canvas },
       anchor: handoff.anchor,
     },
+    playbackFrameRate: handoff.frameRate,
     orderedSlotIds,
     slots,
     revisions,
@@ -309,6 +312,39 @@ function assertCommand(workspace: FrameWorkspace, options: FrameWorkspaceCommand
 
 function changed(workspace: FrameWorkspace, options: FrameWorkspaceCommandOptions, patch: Partial<FrameWorkspace>): FrameWorkspace {
   return { ...workspace, ...patch, revision: workspace.revision + 1, updatedAt: options.updatedAt };
+}
+
+function assertPlaybackFrameRate(frameRate: number): void {
+  if (!Number.isSafeInteger(frameRate) || frameRate <= 0) {
+    throw new Error("播放帧率必须是正整数。");
+  }
+}
+
+/**
+ * Restores fields introduced after IndexedDB v4 without changing the workspace revision.
+ * Existing workspaces therefore inherit their immutable source FPS until the user edits it.
+ */
+export function restoreFrameWorkspaceDefaults(workspace: FrameWorkspace): FrameWorkspace {
+  const storedFrameRate = (workspace as FrameWorkspace & { readonly playbackFrameRate?: number })
+    .playbackFrameRate;
+  const playbackFrameRate = storedFrameRate ?? workspace.source.frameRate;
+  assertPlaybackFrameRate(playbackFrameRate);
+  return storedFrameRate === undefined ? { ...workspace, playbackFrameRate } : workspace;
+}
+
+export function getFrameWorkspacePlaybackFrameRate(workspace: FrameWorkspace): number {
+  return restoreFrameWorkspaceDefaults(workspace).playbackFrameRate;
+}
+
+export function setFrameWorkspaceFrameRate(
+  workspace: FrameWorkspace,
+  playbackFrameRate: number,
+  options: FrameWorkspaceCommandOptions,
+): FrameWorkspace {
+  assertCommand(workspace, options);
+  assertPlaybackFrameRate(playbackFrameRate);
+  if (getFrameWorkspacePlaybackFrameRate(workspace) === playbackFrameRate) return workspace;
+  return changed(workspace, options, { playbackFrameRate });
 }
 
 function requireSlot(workspace: FrameWorkspace, slotId: string): FrameWorkspaceSlot {
@@ -803,7 +839,7 @@ export function createFrameWorkspaceSnapshot(
     sourceJobId: workspace.sourceJobId,
     createdAt: input.createdAt,
     frames,
-    frameRate: workspace.source.frameRate,
+    frameRate: getFrameWorkspacePlaybackFrameRate(workspace),
     loopMode: workspace.source.loopMode,
     canvas: { ...workspace.source.canvas },
     anchor: workspace.source.anchor,

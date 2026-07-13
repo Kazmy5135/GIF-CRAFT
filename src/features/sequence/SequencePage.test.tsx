@@ -278,8 +278,28 @@ describe("SequencePage", () => {
     );
     expect(screen.getByRole("link", { name: "进入序列帧工作区" })).toHaveAttribute(
       "href",
-      "/frames?jobId=job-1",
+      "/workspace/job-1",
     );
+  });
+
+  it("records a full-sequence redo without reusing the original sequence id", async () => {
+    const submit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MemoryRouter initialEntries={["/create/sequence?redoOf=job-original"]}>
+        <SourceImageContext.Provider value={sourceContext()}>
+          <SequenceContext.Provider value={sequenceContext({ submit })}>
+            <SequencePage />
+          </SequenceContext.Provider>
+        </SourceImageContext.Provider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("正在重做序列 job-original")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/轻微呼吸/), { target: { value: "redo idle" } });
+    const button = screen.getByRole("button", { name: "开始生成" });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    expect(submit.mock.calls[0][2]).toEqual({ redoOfJobId: "job-original" });
   });
 
   it("normalizes a historical completed record whose persisted stage is stale", () => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   compileSequencePrompt,
   diffSequenceParameters,
@@ -66,6 +66,8 @@ function formatElapsed(createdAt: string, now: number): string {
 }
 
 export function SequencePage() {
+  const [searchParams] = useSearchParams();
+  const redoOfJobId = searchParams.get("redoOf")?.trim() || undefined;
   const { historyLoading, currentSourceId, currentSource } = useSourceImages();
   const {
     providers,
@@ -263,7 +265,7 @@ export function SequencePage() {
       parameterMappings: mappings,
       providerExtensions: { proxyInstanceId: selectedProvider.proxyInstanceId },
     };
-    await submit(request, currentSource.dataUrl).catch(() => undefined);
+    await submit(request, currentSource.dataUrl, { redoOfJobId }).catch(() => undefined);
   }
 
   const frameOptions = selectedProvider?.frameCounts.length ? selectedProvider.frameCounts : [8, 12];
@@ -274,15 +276,22 @@ export function SequencePage() {
     <main className="page-content">
       <header className="page-header">
         <h1>生成序列帧</h1>
-        <p>使用已确认源图和工程预设创建稳定、有序的游戏动画帧。</p>
+        <p>新生成 · 步骤 2/2：使用已确认静态图创建一个独立的序列帧 ID。</p>
       </header>
+
+      {redoOfJobId && (
+        <div className="alert info workflow-notice">
+          <strong>正在重做序列 {redoOfJobId}</strong>
+          <p>本次提交会创建新的序列帧 ID，原序列和原工作区保持不变。</p>
+        </div>
+      )}
 
       <div className="sequence-grid">
         <form className="panel sequence-controls" onSubmit={(event) => void onSubmit(event)}>
           <section className="source-summary">
             <div className="section-heading">
               <div><h2>已确认源图</h2><p>提交任务时会冻结这份输入。</p></div>
-              <Link className="button" to="/image">返回替换</Link>
+              <Link className="button" to={redoOfJobId ? `/create?redoOf=${encodeURIComponent(redoOfJobId)}` : "/create"}>返回替换</Link>
             </div>
             {currentSource && !historyLoading ? (
               <div className="source-card">
@@ -403,7 +412,7 @@ export function SequencePage() {
                 {complete && (
                   <div className="result-handoff">
                     <p>{frames.length} 帧 · {currentJob.request.effectiveParameters.frameRate} FPS · {currentJob.request.effectiveParameters.loopMode === "loop" ? "循环" : "单次"}</p>
-                    <Link className="button primary" to={`/frames?jobId=${encodeURIComponent(currentJob.id)}`}>进入序列帧工作区</Link>
+                    <Link className="button primary" to={`/workspace/${encodeURIComponent(currentJob.id)}`}>进入序列帧工作区</Link>
                   </div>
                 )}
                 {currentJob.status === "completed" && resultStorageStatus === "purged" && (

@@ -35,11 +35,17 @@ export interface WorkspaceFrameView {
 
 export interface WorkspaceView {
   id: string;
+  /** @deprecated Use sourceJobId. */
   jobId: string;
+  sourceJobId: string;
+  sourceImageId: string;
   revision: number;
   persistedRevision: number;
   presetName: string;
+  /** @deprecated Use playbackFrameRate. */
   frameRate: number;
+  sourceFrameRate: number;
+  playbackFrameRate: number;
   loopMode: SequenceLoopMode;
   canvas: { width: number; height: number };
   frames: WorkspaceFrameView[];
@@ -62,7 +68,8 @@ export interface SnapshotView {
 export type WorkspaceCommand =
   | { type: "set_decision"; frameId: string; decision: FrameDecisionView }
   | { type: "restore"; frameId: string }
-  | { type: "move"; frameId: string; targetIndex: number };
+  | { type: "move"; frameId: string; targetIndex: number }
+  | { type: "set_frame_rate"; frameRate: number };
 
 export class WorkspaceConflictError extends Error {
   constructor(message = "工作区已在另一个页面更新。") {

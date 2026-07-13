@@ -16,8 +16,10 @@ import {
   registerFrameRetryAttempt,
   removeFrame,
   restoreFrame,
+  restoreFrameWorkspaceDefaults,
   restoreOriginalFrame,
   setFrameDecision,
+  setFrameWorkspaceFrameRate,
   transitionFrameRetryAttempt,
   transitionWorkspaceRetryAttempt,
   validateFrameWorkspaceSnapshot,
@@ -140,6 +142,7 @@ describe("frame workspace handoff and creation", () => {
       isCurrent: true,
     });
     expect(result.revision).toBe(0);
+    expect(result.playbackFrameRate).toBe(8);
   });
 
   it("rejects unreadable, foreign, duplicated, non-contiguous and dimension-mismatched input", () => {
@@ -237,6 +240,32 @@ describe("revision concurrency", () => {
     expect(persisted.lastPersistedRevision).toBe(1);
     expect(markFrameWorkspacePersisted(persisted, 0)).toBe(persisted);
     expect(() => markFrameWorkspacePersisted(persisted, 2)).toThrow("持久化确认修订无效");
+  });
+
+  it("overrides playback FPS non-destructively through revision-checked commands", () => {
+    const initial = workspace();
+    const updated = setFrameWorkspaceFrameRate(initial, 12, options(initial));
+
+    expect(updated).toMatchObject({ playbackFrameRate: 12, revision: 1 });
+    expect(updated.source.frameRate).toBe(8);
+    expect(setFrameWorkspaceFrameRate(updated, 12, options(updated))).toBe(updated);
+    expect(() => setFrameWorkspaceFrameRate(updated, 16, { expectedRevision: 0, updatedAt: t1 })).toThrow(
+      FrameWorkspaceConflictError,
+    );
+    expect(() => setFrameWorkspaceFrameRate(updated, 0, options(updated))).toThrow("正整数");
+    expect(() => setFrameWorkspaceFrameRate(updated, 7.5, options(updated))).toThrow("正整数");
+  });
+
+  it("restores legacy v4 workspaces to their immutable source FPS without a new revision", () => {
+    const initial = workspace();
+    const { playbackFrameRate: _legacyMissingField, ...legacyFields } = initial;
+    const legacy = legacyFields as FrameWorkspace;
+
+    const restored = restoreFrameWorkspaceDefaults(legacy);
+
+    expect(restored.playbackFrameRate).toBe(8);
+    expect(restored.revision).toBe(initial.revision);
+    expect(restored.updatedAt).toBe(initial.updatedAt);
   });
 });
 
@@ -384,6 +413,7 @@ describe("snapshot readiness and immutable export contract", () => {
     let ready = keepAll(workspace());
     ready = removeFrame(ready, "slot:frame-1", options(ready));
     ready = moveFrameSlot(ready, "slot:frame-2", "first", options(ready));
+    ready = setFrameWorkspaceFrameRate(ready, 12, options(ready));
     const snapshot = createFrameWorkspaceSnapshot(ready, {
       snapshotId: "snapshot-1",
       createdAt: "2026-07-12T02:00:00.000Z",
@@ -396,7 +426,7 @@ describe("snapshot readiness and immutable export contract", () => {
     expect(snapshot).toMatchObject({
       workspaceId: "workspace-1",
       sourceJobId: "job-1",
-      frameRate: 8,
+      frameRate: 12,
       loopMode: "loop",
       canvas: { width: 512, height: 512 },
       anchor: "bottom_center_feet_baseline",
@@ -404,5 +434,24 @@ describe("snapshot readiness and immutable export contract", () => {
     expect(Object.isFrozen(snapshot)).toBe(true);
     expect(Object.isFrozen(snapshot.frames)).toBe(true);
     expect(Object.isFrozen(snapshot.frames[0])).toBe(true);
+    expect(ready.source.frameRate).toBe(8);
+  });
+
+  it("keeps earlier snapshots unchanged when a later revision overrides FPS", () => {
+    const ready = keepAll(workspace());
+    const originalSnapshot = createFrameWorkspaceSnapshot(ready, {
+      snapshotId: "snapshot-original-fps",
+      createdAt: "2026-07-12T02:00:00.000Z",
+    });
+    const updated = setFrameWorkspaceFrameRate(ready, 16, options(ready));
+    const updatedSnapshot = createFrameWorkspaceSnapshot(updated, {
+      snapshotId: "snapshot-overridden-fps",
+      createdAt: "2026-07-12T02:01:00.000Z",
+    });
+
+    expect(originalSnapshot.frameRate).toBe(8);
+    expect(updatedSnapshot.frameRate).toBe(16);
+    expect(originalSnapshot.frameRate).toBe(8);
+    expect(originalSnapshot.revision).not.toBe(updatedSnapshot.revision);
   });
 });

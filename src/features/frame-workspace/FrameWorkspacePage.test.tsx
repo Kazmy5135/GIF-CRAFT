@@ -31,10 +31,14 @@ function workspace(): WorkspaceView {
   return {
     id: "workspace-1",
     jobId: "job-1",
+    sourceJobId: "job-1",
+    sourceImageId: "source-1",
     revision: 0,
     persistedRevision: 0,
     presetName: "角色待机",
     frameRate: 8,
+    sourceFrameRate: 8,
+    playbackFrameRate: 8,
     loopMode: "loop",
     canvas: { width: 64, height: 64 },
     updatedAt: "2026-07-12T00:00:00.000Z",
@@ -54,6 +58,7 @@ function workspace(): WorkspaceView {
 function applyCommand(current: WorkspaceView, command: WorkspaceCommand): WorkspaceView {
   if (command.type === "set_decision") return { ...current, revision: current.revision + 1, frames: current.frames.map((item) => item.id === command.frameId ? { ...item, decision: command.decision } : item) };
   if (command.type === "restore") return { ...current, revision: current.revision + 1, frames: current.frames.map((item) => item.id === command.frameId ? { ...item, decision: "pending" } : item) };
+  if (command.type === "set_frame_rate") return { ...current, revision: current.revision + 1, frameRate: command.frameRate, playbackFrameRate: command.frameRate };
   const source = current.frames.find((item) => item.id === command.frameId);
   if (!source) return current;
   const frames = current.frames.filter((item) => item.id !== command.frameId);
@@ -99,7 +104,7 @@ describe("FrameWorkspacePage", () => {
   it("审核、非破坏性移除与恢复会同步筛选和自动保存", async () => {
     const testAdapter = adapter();
     renderPage(testAdapter);
-    await screen.findByText("角色待机 · 任务 job-1");
+    await screen.findByText("角色待机 · 序列帧 ID job-1");
 
     fireEvent.click(screen.getByRole("button", { name: "保留" }));
     await waitFor(() => expect(testAdapter.save).toHaveBeenCalled());
@@ -119,7 +124,7 @@ describe("FrameWorkspacePage", () => {
   it("按钮和键盘排序调用同一 move 命令", async () => {
     const testAdapter = adapter();
     renderPage(testAdapter);
-    await screen.findByText("角色待机 · 任务 job-1");
+    await screen.findByText("角色待机 · 序列帧 ID job-1");
     fireEvent.click(screen.getByRole("button", { name: "向后移动" }));
     expect(testAdapter.apply).toHaveBeenCalledWith(expect.anything(), { type: "move", frameId: "slot-0", targetIndex: 1 });
     fireEvent.keyDown(within(screen.getByRole("listbox", { name: "工作区帧顺序" })).getByRole("option", { selected: true }), { key: "ArrowLeft", altKey: true });
@@ -131,16 +136,30 @@ describe("FrameWorkspacePage", () => {
     const ready: WorkspaceView = { ...base, frames: base.frames.map((item) => ({ ...item, decision: "kept" })) };
     const testAdapter = adapter(ready);
     renderPage(testAdapter);
-    await screen.findByText("所有纳入帧均已保留且资源可读，可以生成不可变快照。");
+    await screen.findByText("所有纳入帧均已保留且资源可读，可以生成不可变快照并导出。");
     fireEvent.click(screen.getByRole("button", { name: "生成工作区快照" }));
     expect(await screen.findByText("快照 snapshot-1 已生成，共 3 帧。")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "导出 PNG ZIP" })).toHaveAttribute("href", "/export/snapshot-1");
+  });
+
+  it("非破坏性修改播放帧率并提供整序列重做入口", async () => {
+    const testAdapter = adapter();
+    renderPage(testAdapter);
+    await screen.findByText("角色待机 · 序列帧 ID job-1");
+    expect(screen.getByText(/原始生成任务保持 8 FPS/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("播放帧率"), { target: { value: "12" } });
+    expect(testAdapter.apply).toHaveBeenCalledWith(expect.anything(), { type: "set_frame_rate", frameRate: 12 });
+    expect(screen.getByRole("link", { name: "重做此序列" })).toHaveAttribute(
+      "href",
+      "/create?sourceId=source-1&redoOf=job-1",
+    );
   });
 
   it("revision 冲突不会静默覆盖并提供显式重新加载", async () => {
     const testAdapter = adapter();
     vi.mocked(testAdapter.save).mockRejectedValueOnce(new WorkspaceConflictError());
     renderPage(testAdapter);
-    await screen.findByText("角色待机 · 任务 job-1");
+    await screen.findByText("角色待机 · 序列帧 ID job-1");
     fireEvent.click(screen.getByRole("button", { name: "保留" }));
     expect(await screen.findByText("检测到多标签页冲突")).toBeInTheDocument();
     await act(async () => screen.getByRole("button", { name: /加载最新版本/ }).click());
@@ -150,7 +169,7 @@ describe("FrameWorkspacePage", () => {
   it("快速连续编辑按 revision 顺序排队保存", async () => {
     const testAdapter = adapter();
     renderPage(testAdapter, 20);
-    await screen.findByText("角色待机 · 任务 job-1");
+    await screen.findByText("角色待机 · 序列帧 ID job-1");
     fireEvent.click(screen.getByRole("button", { name: "保留" }));
     fireEvent.click(screen.getByRole("button", { name: "向后移动" }));
     await waitFor(() => expect(testAdapter.save).toHaveBeenCalledTimes(2));
@@ -178,7 +197,7 @@ describe("FrameWorkspacePage", () => {
       frames: current.frames.map((item, index) => index === 0 ? { ...item, currentVersion: "candidate", retryStatus: "idle", candidate: undefined } : item),
     }));
     renderPage(testAdapter);
-    await screen.findByText("角色待机 · 任务 job-1");
+    await screen.findByText("角色待机 · 序列帧 ID job-1");
     fireEvent.click(screen.getByRole("button", { name: "完整重生成并提取此帧" }));
     expect(await screen.findByAltText("重试候选帧")).toBeInTheDocument();
     expect(screen.getByText(/不会自动替换/)).toBeInTheDocument();
@@ -241,7 +260,7 @@ describe("FrameWorkspacePage", () => {
       resolveRetry = resolve;
     }));
     renderPage(testAdapter);
-    await screen.findByText("角色待机 · 任务 job-1");
+    await screen.findByText("角色待机 · 序列帧 ID job-1");
     const retryButton = screen.getByRole("button", { name: "完整重生成并提取此帧" });
     fireEvent.click(retryButton);
     fireEvent.click(retryButton);
@@ -256,7 +275,7 @@ describe("FrameWorkspacePage", () => {
       .mockImplementationOnce((current) => new Promise((resolve) => { resolveFirst = resolve; }))
       .mockImplementationOnce(async (current) => ({ ...current, persistedRevision: current.revision }));
     renderPage(testAdapter, 0);
-    await screen.findByText("角色待机 · 任务 job-1");
+    await screen.findByText("角色待机 · 序列帧 ID job-1");
     fireEvent.click(screen.getByRole("button", { name: "保留" }));
     await waitFor(() => expect(testAdapter.save).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("button", { name: "向后移动" }));
@@ -271,7 +290,7 @@ describe("FrameWorkspacePage", () => {
   it("pagehide 会尽力立即 flush 尚未到防抖时间的保存", async () => {
     const testAdapter = adapter();
     renderPage(testAdapter, 60_000);
-    await screen.findByText("角色待机 · 任务 job-1");
+    await screen.findByText("角色待机 · 序列帧 ID job-1");
     fireEvent.click(screen.getByRole("button", { name: "保留" }));
     window.dispatchEvent(new Event("pagehide"));
     await waitFor(() => expect(testAdapter.save).toHaveBeenCalledTimes(1));
@@ -282,7 +301,7 @@ describe("FrameWorkspacePage", () => {
     const conflict = Object.assign(new Error("conflict"), { name: "FrameWorkspaceRevisionConflictError" });
     vi.mocked(testAdapter.requestRetry).mockRejectedValueOnce(conflict);
     renderPage(testAdapter);
-    await screen.findByText("角色待机 · 任务 job-1");
+    await screen.findByText("角色待机 · 序列帧 ID job-1");
     fireEvent.click(screen.getByRole("button", { name: "完整重生成并提取此帧" }));
     expect(await screen.findByText("检测到多标签页冲突")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /加载最新版本/ })).toBeEnabled();
