@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { ImageLibraryPage, SequenceLibraryPage } from "../features/asset-library";
 import { ExportPage } from "../features/export";
 import { FrameWorkspaceRoute } from "../features/frame-workspace";
@@ -7,14 +7,7 @@ import { SettingsPage } from "../features/settings/SettingsPage";
 import { SequencePage } from "../features/sequence/SequencePage";
 import { ErrorBoundary } from "./ErrorBoundary";
 
-const tabs = [
-  { to: "/create", label: "新生成" },
-  { to: "/library", label: "库存" },
-  { to: "/settings", label: "设置" },
-];
-
 export function App() {
-  const location = useLocation();
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -23,27 +16,36 @@ export function App() {
           <span>序列帧生产工具</span>
         </div>
         <nav aria-label="主要功能">
-          {tabs.map((tab) => (
+          <div className="nav-group">
             <NavLink
-              key={tab.to}
-              to={tab.to}
+              to="/create"
               className={({ isActive }) => `nav-tab${isActive ? " active" : ""}`}
             >
-              {tab.label}
+              新生成
             </NavLink>
-          ))}
-          {location.pathname.startsWith("/create") && (
-            <div className="nav-subtabs" aria-label="新生成步骤">
-              <NavLink end to="/create">1 静态图</NavLink>
-              <NavLink to="/create/sequence">2 序列生成</NavLink>
+            <div className="nav-subtabs" aria-label="新生成二级功能">
+              <NavLink end to="/create">静态图生成</NavLink>
+              <NavLink to="/create/sequence">序列帧生成</NavLink>
             </div>
-          )}
-          {location.pathname.startsWith("/library") && (
-            <div className="nav-subtabs" aria-label="库存分类">
+          </div>
+          <div className="nav-group">
+            <NavLink
+              to="/library"
+              className={({ isActive }) => `nav-tab${isActive ? " active" : ""}`}
+            >
+              库存
+            </NavLink>
+            <div className="nav-subtabs" aria-label="库存二级功能">
               <NavLink to="/library/images">图库</NavLink>
               <NavLink to="/library/sequences">序列帧库</NavLink>
             </div>
-          )}
+          </div>
+          <NavLink
+            to="/settings"
+            className={({ isActive }) => `nav-tab${isActive ? " active" : ""}`}
+          >
+            设置
+          </NavLink>
         </nav>
       </aside>
       <section className="page-shell">

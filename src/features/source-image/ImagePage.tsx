@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { compileSourceImagePrompt } from "../../core/promptTemplates";
 import {
@@ -25,6 +32,22 @@ const qualityLabels: Record<QualityLevel, string> = {
   standard: "标准",
   high: "高质量",
 };
+
+const previewScaleLimits = { minimum: 0.25, maximum: 8 } as const;
+
+interface PreviewTransform {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+interface PreviewDragState {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  originX: number;
+  originY: number;
+}
 
 function fileExtension(mimeType: string) {
   if (mimeType === "image/jpeg") return "jpg";
@@ -60,9 +83,45 @@ export function ImagePage() {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("1:1");
   const [quality, setQuality] = useState<QualityLevel>("standard");
   const [count, setCount] = useState(1);
+  const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
+  const historyStripRef = useRef<HTMLDivElement>(null);
+  const historyFrameRef = useRef<HTMLDivElement>(null);
+  const previewStageRef = useRef<HTMLDivElement>(null);
+  const parametersPanelRef = useRef<HTMLFormElement>(null);
+  const previewDragRef = useRef<PreviewDragState | null>(null);
+  const [historyScrollState, setHistoryScrollState] = useState({
+    position: 0,
+    maximum: 0,
+  });
+  const [previewTransform, setPreviewTransform] = useState<PreviewTransform>({
+    scale: 1,
+    x: 0,
+    y: 0,
+  });
+  const [previewDragging, setPreviewDragging] = useState(false);
 
   const selectedProvider = providers.find((item) => item.id === provider);
   const busy = ["validating", "submitting", "generating"].includes(taskStatus);
+  const requestedAsset = useMemo(
+    () => history.find((asset) => asset.id === requestedSourceId),
+    [history, requestedSourceId],
+  );
+  const newestAssetId = history[0]?.id ?? null;
+  const previewAsset = useMemo(
+    () =>
+      history.find((asset) => asset.id === previewAssetId) ??
+      requestedAsset ??
+      history[0] ??
+      null,
+    [history, previewAssetId, requestedAsset],
+  );
+  const previewConfirmed = Boolean(
+    previewAsset &&
+      currentSourceId === previewAsset.id &&
+      previewAsset.confirmedAt &&
+      previewAsset.contentSnapshotId &&
+      previewAsset.availability === "available",
+  );
   const compiledPrompt = useMemo(
     () =>
       mode === "local_upload"
@@ -82,6 +141,80 @@ export function ImagePage() {
       setCount(1);
     }
   }, [count, selectedProvider]);
+
+  useEffect(() => {
+    setPreviewAssetId(requestedAsset?.id ?? newestAssetId);
+  }, [newestAssetId, requestedAsset?.id]);
+
+  useEffect(() => {
+    if (previewAssetId && !history.some((asset) => asset.id === previewAssetId)) {
+      setPreviewAssetId(requestedAsset?.id ?? newestAssetId);
+    }
+  }, [history, newestAssetId, previewAssetId, requestedAsset?.id]);
+
+  useEffect(() => {
+    resetPreviewTransform();
+  }, [previewAsset?.id]);
+
+  useEffect(() => {
+    const element = previewStageRef.current;
+    if (!element || !previewAsset) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey || event.deltaY === 0) return;
+
+      event.preventDefault();
+      const bounds = element.getBoundingClientRect();
+      const pointerX = event.clientX - bounds.left - bounds.width / 2;
+      const pointerY = event.clientY - bounds.top - bounds.height / 2;
+      const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+      setPreviewTransform((current) => {
+        const scale = Math.min(
+          previewScaleLimits.maximum,
+          Math.max(previewScaleLimits.minimum, current.scale * factor),
+        );
+        if (scale === current.scale) return current;
+        const ratio = scale / current.scale;
+        return {
+          scale,
+          x: pointerX - (pointerX - current.x) * ratio,
+          y: pointerY - (pointerY - current.y) * ratio,
+        };
+      });
+    };
+
+    element.addEventListener("wheel", handleWheel, { passive: false });
+    return () => element.removeEventListener("wheel", handleWheel);
+  }, [previewAsset]);
+
+  useEffect(() => {
+    const element = historyStripRef.current;
+    const frame = historyFrameRef.current;
+    if (!element) {
+      setHistoryScrollState({ position: 0, maximum: 0 });
+      return;
+    }
+    const update = () => updateHistoryScrollState();
+    const handleWheel = (event: WheelEvent) => {
+      if (event.deltaY === 0) return;
+      event.preventDefault();
+      const maximum = Math.max(0, element.scrollWidth - element.clientWidth);
+      element.scrollLeft = Math.min(maximum, Math.max(0, element.scrollLeft + event.deltaY));
+      update();
+    };
+    update();
+    element.addEventListener("scroll", update, { passive: true });
+    frame?.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("resize", update);
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    resizeObserver?.observe(element);
+    return () => {
+      element.removeEventListener("scroll", update);
+      frame?.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("resize", update);
+      resizeObserver?.disconnect();
+    };
+  }, [history.length]);
 
   const invalidReason = useMemo(() => {
     if (mode === "local_upload") return referenceImage ? "" : "请先选择本地图片。";
@@ -141,6 +274,79 @@ export function ImagePage() {
     navigate(`/create/sequence${query ? `?${query}` : ""}`);
   }
 
+  function updateHistoryScrollState() {
+    const element = historyStripRef.current;
+    if (!element) return;
+    const next = {
+      position: element.scrollLeft,
+      maximum: Math.max(0, element.scrollWidth - element.clientWidth),
+    };
+    setHistoryScrollState((current) =>
+      current.position === next.position && current.maximum === next.maximum
+        ? current
+        : next,
+    );
+  }
+
+  function setHistoryScrollPosition(position: number) {
+    const element = historyStripRef.current;
+    if (!element) return;
+    element.scrollLeft = Math.min(
+      Math.max(0, element.scrollWidth - element.clientWidth),
+      Math.max(0, position),
+    );
+    updateHistoryScrollState();
+  }
+
+  function focusNewImageParameters() {
+    const panel = parametersPanelRef.current;
+    panel?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    panel?.querySelector<HTMLElement>("textarea, input:not([type='hidden']), select, button")?.focus({
+      preventScroll: true,
+    });
+  }
+
+  function resetPreviewTransform() {
+    previewDragRef.current = null;
+    setPreviewDragging(false);
+    setPreviewTransform({ scale: 1, x: 0, y: 0 });
+  }
+
+  function handlePreviewPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 1 || !previewAsset) return;
+    event.preventDefault();
+    previewDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: previewTransform.x,
+      originY: previewTransform.y,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setPreviewDragging(true);
+  }
+
+  function handlePreviewPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = previewDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    setPreviewTransform((current) => ({
+      ...current,
+      x: drag.originX + event.clientX - drag.startX,
+      y: drag.originY + event.clientY - drag.startY,
+    }));
+  }
+
+  function finishPreviewDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = previewDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    previewDragRef.current = null;
+    setPreviewDragging(false);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+  }
+
   return (
     <main className="page-content">
       <header className="page-header">
@@ -160,8 +366,12 @@ export function ImagePage() {
         </div>
       )}
 
-      <div className="workspace-grid">
-        <form className="panel controls-panel" onSubmit={(event) => void submit(event)}>
+      <div className="source-image-workspace">
+        <form
+          className="panel controls-panel source-image-parameters"
+          ref={parametersPanelRef}
+          onSubmit={(event) => void submit(event)}
+        >
           <h2>输入与参数</h2>
 
           <fieldset className="mode-switcher">
@@ -276,75 +486,177 @@ export function ImagePage() {
           )}
         </form>
 
-        <section className="panel results-panel">
+        <section className="panel source-image-preview-panel" aria-label="图片预览">
           <div className="section-heading">
             <div>
-              <h2>结果与历史</h2>
+              <h2>图片预览</h2>
               <p>生成结果会自动进入图库；确认后才会成为本次序列的静态图。</p>
             </div>
             <div className="button-row"><span className="badge">{history.length} 项</span><Link className="button" to="/library/images">打开图库</Link></div>
           </div>
 
-          {history.length === 0 ? (
-            <div className="empty-state">
+          {historyLoading ? (
+            <div className="source-image-preview-stage source-image-preview-empty" aria-busy="true">
+              <p>正在读取图片记录…</p>
+            </div>
+          ) : previewAsset ? (
+            <div
+              ref={previewStageRef}
+              className={`source-image-preview-stage source-image-preview-interactive${previewDragging ? " dragging" : ""}`}
+              onPointerDown={handlePreviewPointerDown}
+              onPointerMove={handlePreviewPointerMove}
+              onPointerUp={finishPreviewDrag}
+              onPointerCancel={finishPreviewDrag}
+              onAuxClick={(event) => {
+                if (event.button === 1) event.preventDefault();
+              }}
+            >
+              <img
+                src={previewAsset.dataUrl}
+                alt={`当前预览：${previewAsset.sourceName || previewAsset.model}`}
+                draggable={false}
+                style={{
+                  transform: `translate3d(${previewTransform.x}px, ${previewTransform.y}px, 0) scale(${previewTransform.scale})`,
+                }}
+              />
+              <div className="source-image-preview-controls">
+                <button
+                  className="source-image-preview-reset"
+                  type="button"
+                  aria-label="复位图片预览"
+                  title="恢复完整适配和初始位置"
+                  onClick={resetPreviewTransform}
+                >
+                  ↺
+                </button>
+                <span>{Math.round(previewTransform.scale * 100)}%</span>
+              </div>
+              <div className="source-image-preview-badges">
+                {previewConfirmed && <span className="badge success">当前源图</span>}
+                {requestedSourceId === previewAsset.id && <span className="badge">重做指定图</span>}
+              </div>
+            </div>
+          ) : (
+            <div className="source-image-preview-stage source-image-preview-empty">
               <p>还没有图片结果。</p>
               <small>完成生成或上传后，结果会保存在浏览器 IndexedDB 中。</small>
             </div>
-          ) : (
-            <div className="result-grid">
-              {history.map((asset) => {
-                const confirmed =
-                  currentSourceId === asset.id &&
-                  Boolean(asset.confirmedAt && asset.contentSnapshotId) &&
-                  asset.availability === "available";
-                return (
-                  <article className={`result-card${confirmed ? " confirmed" : ""}${requestedSourceId === asset.id ? " requested" : ""}`} key={asset.id}>
-                    <a href={asset.dataUrl} target="_blank" rel="noreferrer" title="打开原图">
-                      <img src={asset.dataUrl} alt={`由 ${asset.model} 创建的源图候选`} />
-                    </a>
-                    <div className="result-meta">
-                      <div className="result-title">
-                        <strong>{asset.provider === "local" ? "本地上传" : asset.model}</strong>
-                        {confirmed && <span className="badge success">当前源图</span>}
-                      </div>
-                      <small>
-                        {asset.width && asset.height ? `${asset.width} × ${asset.height} · ` : ""}
-                        {asset.effectiveParameters.quality} · {new Date(asset.createdAt).toLocaleString()}
-                      </small>
-                      {asset.promptSnapshot.userPrompt && <p title={asset.promptSnapshot.compiledPrompt}>{asset.promptSnapshot.userPrompt}</p>}
-                      <details>
-                        <summary>查看生成元数据</summary>
-                        <small>
-                          任务：{asset.jobId}<br />
-                          模式：{asset.mode}<br />
-                          规格：{asset.effectiveParameters.providerSize}<br />
-                          模板：v{asset.promptSnapshot.templateVersion}
-                        </small>
-                        {asset.promptSnapshot.compiledPrompt && <pre>{asset.promptSnapshot.compiledPrompt}</pre>}
-                      </details>
-                    </div>
-                    <div className="button-row card-actions">
-                      <button className="button primary" type="button" onClick={() => void confirmAndContinue(asset).catch(() => undefined)}>
-                        {confirmed ? "使用此图继续" : requestedSourceId === asset.id ? "确认对应静态图并继续" : "确认并进入序列生成"}
-                      </button>
-                      <a
-                        className="button"
-                        href={asset.dataUrl}
-                        download={`gif-craft-${asset.id}.${fileExtension(asset.mimeType)}`}
-                      >
-                        下载
-                      </a>
-                      <button className="button" type="button" onClick={() => reuseAsset(asset)}>
-                        复用参数
-                      </button>
-                      <button className="button danger" type="button" onClick={() => void removeSourceImage(asset.id).catch(() => undefined)}>
-                        删除记录
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
+          )}
+
+          <section className="source-image-history" aria-labelledby="source-image-history-title">
+            <div className="source-image-history-heading">
+              <div>
+                <h3 id="source-image-history-title">当前结果与历史记录</h3>
+                <p>选择缩略图切换上方预览。</p>
+              </div>
+              <span className="form-hint">{history.length} 张</span>
             </div>
+
+            <div className="source-image-history-frame" ref={historyFrameRef}>
+              <div className="source-image-history-carousel">
+                <div
+                  className="source-image-history-strip"
+                  ref={historyStripRef}
+                  role="list"
+                  aria-label="当前结果与历史缩略图"
+                  onScroll={updateHistoryScrollState}
+                >
+                  {history.map((asset) => {
+                    const confirmed =
+                      currentSourceId === asset.id &&
+                      Boolean(asset.confirmedAt && asset.contentSnapshotId) &&
+                      asset.availability === "available";
+                    const selected = previewAsset?.id === asset.id;
+                    return (
+                      <div role="listitem" key={asset.id}>
+                        <button
+                          className={`source-image-history-thumb${selected ? " selected" : ""}${confirmed ? " confirmed" : ""}${requestedSourceId === asset.id ? " requested" : ""}`}
+                          type="button"
+                          aria-label={`预览图片：${asset.sourceName || asset.model}，${new Date(asset.createdAt).toLocaleString()}`}
+                          aria-pressed={selected}
+                          onClick={() => setPreviewAssetId(asset.id)}
+                        >
+                          <span className="source-image-history-thumb-image">
+                            <img src={asset.dataUrl} alt="" />
+                            {confirmed && <span className="source-image-history-thumb-status">当前</span>}
+                            {!confirmed && requestedSourceId === asset.id && <span className="source-image-history-thumb-status">指定</span>}
+                          </span>
+                          <span className="source-image-history-thumb-label">
+                            {asset.provider === "local" ? "本地上传" : asset.model}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <div role="listitem">
+                    <button
+                      className="source-image-history-thumb source-image-history-new"
+                      type="button"
+                      aria-label="新建图片"
+                      onClick={focusNewImageParameters}
+                    >
+                      <span className="source-image-history-new-icon" aria-hidden="true">＋</span>
+                      <span className="source-image-history-thumb-label">新建图片</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <input
+                className="source-image-history-slider"
+                type="range"
+                min="0"
+                max={historyScrollState.maximum}
+                step="1"
+                value={Math.min(historyScrollState.position, historyScrollState.maximum)}
+                disabled={historyScrollState.maximum === 0}
+                aria-label="历史图片横向滚动位置"
+                onChange={(event) => setHistoryScrollPosition(Number(event.target.value))}
+              />
+            </div>
+          </section>
+
+          {previewAsset && (
+            <section className="source-image-preview-details" aria-label="当前预览图片信息">
+              <div className="result-title">
+                <strong>{previewAsset.provider === "local" ? "本地上传" : previewAsset.model}</strong>
+                <span className="form-hint">图片 ID：{previewAsset.id}</span>
+              </div>
+              <small>
+                {previewAsset.width && previewAsset.height ? `${previewAsset.width} × ${previewAsset.height} · ` : ""}
+                {previewAsset.effectiveParameters.quality} · {new Date(previewAsset.createdAt).toLocaleString()}
+              </small>
+              {previewAsset.promptSnapshot.userPrompt && (
+                <p title={previewAsset.promptSnapshot.compiledPrompt}>{previewAsset.promptSnapshot.userPrompt}</p>
+              )}
+              <details className="template-details">
+                <summary>查看生成元数据</summary>
+                <small>
+                  任务：{previewAsset.jobId}<br />
+                  模式：{previewAsset.mode}<br />
+                  规格：{previewAsset.effectiveParameters.providerSize}<br />
+                  模板：v{previewAsset.promptSnapshot.templateVersion}
+                </small>
+                {previewAsset.promptSnapshot.compiledPrompt && <pre>{previewAsset.promptSnapshot.compiledPrompt}</pre>}
+              </details>
+              <div className="button-row source-image-preview-actions">
+                <button className="button primary" type="button" onClick={() => void confirmAndContinue(previewAsset).catch(() => undefined)}>
+                  {previewConfirmed ? "使用此图继续" : requestedSourceId === previewAsset.id ? "确认对应静态图并继续" : "确认并进入序列生成"}
+                </button>
+                <a
+                  className="button"
+                  href={previewAsset.dataUrl}
+                  download={`gif-craft-${previewAsset.id}.${fileExtension(previewAsset.mimeType)}`}
+                >
+                  下载
+                </a>
+                <button className="button" type="button" onClick={() => reuseAsset(previewAsset)}>
+                  复用参数
+                </button>
+                <button className="button danger" type="button" onClick={() => void removeSourceImage(previewAsset.id).catch(() => undefined)}>
+                  删除记录
+                </button>
+              </div>
+            </section>
           )}
         </section>
       </div>
